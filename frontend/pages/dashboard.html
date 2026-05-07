@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <h2>📚 Успеваемость</h2>
+            <div class="user-info">
+                <div class="user-name" id="sidebarUserName"></div>
+                <div class="user-role" id="sidebarUserRole"></div>
+            </div>
+            <ul class="nav-menu" id="navMenu"></ul>
+            <button class="logout-btn" onclick="Auth.logout()">🚪 Выйти</button>
+        </aside>
+        <main class="main-content">
+            <div class="page-header">
+                <h1>Добро пожаловать, <span id="userName"></span>!</h1>
+            </div>
+
+            <button id="changePasswordBtn" class="btn btn-primary" style="width:auto;padding:10px 20px;margin-bottom:20px;">🔒 Сменить пароль</button>
+
+            <div id="passwordModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+                <div style="background:white;padding:30px;border-radius:10px;width:400px;">
+                    <h3>🔒 Смена пароля</h3>
+                    <input type="password" id="oldPassword" placeholder="Старый пароль" style="width:100%;padding:10px;margin:10px 0;border:2px solid #ddd;border-radius:8px;">
+                    <input type="password" id="newPassword" placeholder="Новый пароль" style="width:100%;padding:10px;margin:10px 0;border:2px solid #ddd;border-radius:8px;">
+                    <div style="display:flex;gap:10px;margin-top:15px;">
+                        <button id="savePassword" class="btn btn-primary" style="flex:1;">Сохранить</button>
+                        <button id="cancelPassword" class="btn btn-danger" style="flex:1;">Отмена</button>
+                    </div>
+                    <div id="passwordMessage" style="margin-top:10px;text-align:center;"></div>
+                </div>
+            </div>
+
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <div class="table-container">
+                <h3 style="padding: 20px;">📌 Быстрый доступ</h3>
+                <table>
+                    <thead><tr><th>Раздел</th><th>Описание</th><th>Действие</th></tr></thead>
+                    <tbody id="quickLinks"></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script src="../js/config.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        Auth.checkAuth();
+        const user = Auth.getUser();
+        const token = localStorage.getItem('access_token');
+        if (user.role === 'parent') { window.location.href = 'parent.html'; }
+
+        document.getElementById('sidebarUserName').textContent = user.full_name;
+        document.getElementById('sidebarUserRole').textContent =
+            user.role === 'admin' ? 'Администратор' : user.role === 'teacher' ? 'Преподаватель' : 'Студент';
+        document.getElementById('userName').textContent = user.full_name.split(' ')[0];
+
+        // Меню
+                let menuHTML = '<li><a href="dashboard.html" class="active"><span class="icon">📊</span> Главная</a></li>';
+        if (user.role === 'admin') {
+            menuHTML += '<li><a href="admin.html"><span class="icon">⚙️</span> Администрирование</a></li>';
+        } else if (user.role === 'teacher') {
+            menuHTML += '<li><a href="grades.html"><span class="icon">📝</span> Оценки</a></li>';
+            menuHTML += '<li><a href="attendance.html"><span class="icon">📋</span> Посещаемость</a></li>';
+            menuHTML += '<li><a href="reports.html"><span class="icon">📈</span> Ведомость</a></li>';
+        } else {
+            menuHTML += '<li><a href="grades.html"><span class="icon">📝</span> Оценки</a></li>';
+            menuHTML += '<li><a href="attendance.html"><span class="icon">📋</span> Посещаемость</a></li>';
+        }
+        document.getElementById('navMenu').innerHTML = menuHTML;
+
+        // Быстрый доступ
+        let quickHTML = '';
+        if (user.role !== 'admin') {
+            quickHTML += '<tr><td>📝 Оценки</td><td>Просмотр и управление оценками</td><td><a href="grades.html" style="color:var(--primary);">Перейти →</a></td></tr>';
+            quickHTML += '<tr><td>📋 Посещаемость</td><td>Просмотр и отметка посещаемости</td><td><a href="attendance.html" style="color:var(--primary);">Перейти →</a></td></tr>';
+        } else {
+            quickHTML += '<tr><td>📈 Ведомость</td><td>Отчёты по группам</td><td><a href="reports.html" style="color:var(--primary);">Перейти →</a></td></tr>';
+            quickHTML += '<tr><td>⚙️ Администрирование</td><td>Управление системой</td><td><a href="admin.html" style="color:var(--primary);">Перейти →</a></td></tr>';
+        }
+        document.getElementById('quickLinks').innerHTML = quickHTML;
+
+        // Статистика
+        async function loadStats() {
+            try {
+                const stats = await API.get('/api/reports/stats');
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card"><div class="stat-value">${stats.students}</div><div class="stat-label">Студентов</div></div>
+                    <div class="stat-card"><div class="stat-value">${stats.teachers}</div><div class="stat-label">Преподавателей</div></div>
+                    <div class="stat-card"><div class="stat-value">${stats.groups}</div><div class="stat-label">Групп</div></div>
+                    <div class="stat-card"><div class="stat-value">${stats.subjects}</div><div class="stat-label">Предметов</div></div>
+                    <div class="stat-card"><div class="stat-value">${stats.grades}</div><div class="stat-label">Оценок</div></div>
+                    <div class="stat-card"><div class="stat-value">${stats.attendance}</div><div class="stat-label">Посещаемости</div></div>
+                `;
+            } catch(e) {}
+        }
+        loadStats();
+
+        // Смена пароля
+        document.getElementById('changePasswordBtn').addEventListener('click', () => {
+            document.getElementById('passwordModal').style.display = 'flex';
+        });
+        document.getElementById('cancelPassword').addEventListener('click', () => {
+            document.getElementById('passwordModal').style.display = 'none';
+        });
+        document.getElementById('savePassword').addEventListener('click', async () => {
+            const oldPass = document.getElementById('oldPassword').value;
+            const newPass = document.getElementById('newPassword').value;
+            try {
+                const response = await fetch(`${CONFIG.API_URL}/api/auth/change-password?old_password=${encodeURIComponent(oldPass)}&new_password=${encodeURIComponent(newPass)}`, {
+                    method: 'PUT',
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                const data = await response.json();
+                document.getElementById('passwordMessage').textContent = data.message || data.detail || 'Готово!';
+                document.getElementById('passwordMessage').style.color = response.ok ? 'green' : 'red';
+                if (response.ok) setTimeout(() => document.getElementById('passwordModal').style.display = 'none', 1500);
+            } catch(e) {
+                document.getElementById('passwordMessage').textContent = 'Ошибка';
+                document.getElementById('passwordMessage').style.color = 'red';
+            }
+        });
+    </script>
+<script src="../js/theme.js"></script>
+</body>
+</html>

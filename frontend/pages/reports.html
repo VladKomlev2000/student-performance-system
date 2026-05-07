@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ведомость группы</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <h2>📚 Успеваемость</h2>
+            <div class="user-info">
+                <div class="user-name" id="sidebarUserName"></div>
+                <div class="user-role" id="sidebarUserRole"></div>
+            </div>
+            <ul class="nav-menu" id="navMenu"></ul>
+            <button class="logout-btn" onclick="Auth.logout()">🚪 Выйти</button>
+        </aside>
+        <main class="main-content">
+            <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>Ведомость группы</h1>
+                <button id="exportReportBtn" class="btn btn-primary" style="width: auto; padding: 10px 20px;">📥 Скачать Excel</button>
+            </div>
+            <div class="error-message" id="errorMessage"></div>
+            <div style="background: var(--card-bg); padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="font-weight: 600; font-size: 14px;">Группа</label>
+                    <select id="filterGroup" style="width: 100%; padding: 10px; border: 2px solid var(--border); border-radius: 8px;"><option value="">Выберите группу</option></select>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <label style="font-weight: 600; font-size: 14px;">Предмет</label>
+                    <select id="filterSubject" style="width: 100%; padding: 10px; border: 2px solid var(--border); border-radius: 8px;"><option value="">Выберите предмет</option></select>
+                </div>
+                <div style="flex: 0.5; min-width: 150px;">
+                    <label style="font-weight: 600; font-size: 14px;">С даты</label>
+                    <input type="date" id="filterDateFrom" style="width: 100%; padding: 10px; border: 2px solid var(--border); border-radius: 8px;">
+                </div>
+                <div style="flex: 0.5; min-width: 150px;">
+                    <label style="font-weight: 600; font-size: 14px;">По дату</label>
+                    <input type="date" id="filterDateTo" style="width: 100%; padding: 10px; border: 2px solid var(--border); border-radius: 8px;">
+                </div>
+                <button id="applyFilter" class="btn btn-primary" style="width: auto; padding: 10px 30px;">🔍 Показать</button>
+            </div>
+            <div id="reportResult"></div>
+        </main>
+    </div>
+    <script src="../js/config.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        Auth.checkAuth();
+        const user = Auth.getUser();
+        document.getElementById('sidebarUserName').textContent = user.full_name;
+        document.getElementById('sidebarUserRole').textContent = user.role==='admin'?'Администратор':'Преподаватель';
+
+        let menu = '<li><a href="dashboard.html"><span class="icon">📊</span> Главная</a></li>';
+        if (user.role === 'teacher') {
+            menu += '<li><a href="grades.html"><span class="icon">📝</span> Оценки</a></li>';
+            menu += '<li><a href="attendance.html"><span class="icon">📋</span> Посещаемость</a></li>';
+        }
+        menu += '<li><a href="reports.html" class="active"><span class="icon">📈</span> Ведомость</a></li>';
+        if (user.role === 'admin') {
+            menu += '<li><a href="admin.html"><span class="icon">⚙️</span> Администрирование</a></li>';
+        }
+        document.getElementById('navMenu').innerHTML = menu;
+
+        loadFilters();
+        document.getElementById('applyFilter').addEventListener('click', loadReport);
+
+        async function loadFilters() {
+            const groups = await API.get('/api/admin/groups');
+            document.getElementById('filterGroup').innerHTML = '<option value="">Выберите группу</option>' + groups.map(g => `<option value="${g.id}">${g.name} (курс ${g.course})</option>`).join('');
+            const subjects = user.role==='teacher' ? await API.get('/api/grades/teacher/subjects') : await API.get('/api/admin/subjects');
+            document.getElementById('filterSubject').innerHTML = '<option value="">Выберите предмет</option>' + subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        }
+
+        async function loadReport() {
+            const gid = document.getElementById('filterGroup').value;
+            const sid = document.getElementById('filterSubject').value;
+            if (!gid || !sid) { document.getElementById('reportResult').innerHTML = '<p style="text-align:center;padding:40px;">Выберите группу и предмет</p>'; return; }
+            let url = `${CONFIG.API_URL}/api/reports/group-report?group_id=${gid}&subject_id=${sid}`;
+            if (document.getElementById('filterDateFrom').value) url += `&date_from=${document.getElementById('filterDateFrom').value}`;
+            if (document.getElementById('filterDateTo').value) url += `&date_to=${document.getElementById('filterDateTo').value}`;
+            const data = await API.get(url.replace(CONFIG.API_URL, ''));
+            window._reportParams = { group_id: gid, subject_id: sid, date_from: document.getElementById('filterDateFrom').value, date_to: document.getElementById('filterDateTo').value };
+            let html = `<h3 style="margin-bottom:20px;">${data.group_name} — ${data.subject_name}</h3>`;
+            if (data.students.length === 0) html += '<p style="text-align:center;">Нет данных</p>';
+            else {
+                html += '<div class="table-container"><table><thead><tr><th>Студент</th><th>Билет</th><th>Оценки</th><th>Средний балл</th></tr></thead><tbody>';
+                data.students.forEach(s => {
+                    html += `<tr><td>${s.student_name}</td><td>${s.student_card}</td><td>${s.grades.map(g => `<span class="${g.value>=5?'grade-excellent':g.value>=4?'grade-good':g.value>=3?'grade-satisfactory':'grade-poor'}">${g.value}</span>`).join(', ') || '-'}</td><td><strong>${s.average}</strong></td></tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+            document.getElementById('reportResult').innerHTML = html;
+        }
+
+        document.getElementById('exportReportBtn').addEventListener('click', () => {
+            const p = window._reportParams;
+            if (!p) { alert('Сначала сформируйте отчёт'); return; }
+            let url = `${CONFIG.API_URL}/api/reports/group-report/excel?group_id=${p.group_id}&subject_id=${p.subject_id}`;
+            if (p.date_from) url += `&date_from=${p.date_from}`;
+            if (p.date_to) url += `&date_to=${p.date_to}`;
+            window.open(url, '_blank');
+        });
+    </script>
+<script src="../js/theme.js"></script>
+</body>
+</html>

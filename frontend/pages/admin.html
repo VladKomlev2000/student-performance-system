@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-btn { padding: 10px 20px; border: 2px solid var(--border); background: white; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .tab-btn:hover, .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-row input, .form-row select { width: 100%; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; background: white; }
+        .form-row input:focus, .form-row select:focus { border-color: var(--primary); }
+        .card { background: var(--card-bg); padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; }
+        .card h3 { margin-bottom: 15px; color: var(--primary); }
+        th[onclick] { cursor: pointer; user-select: none; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <h2>📚 Успеваемость</h2>
+            <div class="user-info">
+                <div class="user-name" id="sidebarUserName"></div>
+                <div class="user-role">Администратор</div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="dashboard.html"><span class="icon">📊</span> Главная</a></li>
+                <li><a href="admin.html" class="active"><span class="icon">⚙️</span> Администрирование</a></li>
+            </ul>
+            <button class="logout-btn" onclick="Auth.logout()">🚪 Выйти</button>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header"><h1>Администрирование</h1></div>
+            <div class="success-message" id="successMessage"></div>
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('groups')">👥 Группы</button>
+                <button class="tab-btn" onclick="switchTab('students')">🎓 Студенты</button>
+                <button class="tab-btn" onclick="switchTab('teachers')">👨‍🏫 Преподаватели</button>
+                <button class="tab-btn" onclick="switchTab('subjects')">📖 Предметы</button>
+                <button class="tab-btn" onclick="switchTab('users')">👤 Пользователи</button>
+                <button class="tab-btn" onclick="switchTab('logs')">📋 Логи</button>
+                <button class="tab-btn" onclick="switchTab('parents')">👨‍👩‍👧 Родители</button>
+            </div>
+
+            <!-- Группы -->
+            <div class="tab-content active" id="tab-groups">
+                <div class="card">
+                    <h3>➕ Создать группу</h3>
+                    <form id="groupForm">
+                        <div class="form-row">
+                            <input type="text" id="groupName" placeholder="Название (ИС-301)" required>
+                            <input type="number" id="groupCourse" placeholder="Курс (1-5)" min="1" max="5" required>
+                            <input type="text" id="groupFaculty" placeholder="Факультет" required style="grid-column: span 2;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:15px;">Создать</button>
+                    </form>
+                </div>
+                <div class="table-container" id="groupsTable"></div>
+            </div>
+
+            <!-- Студенты -->
+            <div class="tab-content" id="tab-students">
+                <div class="card">
+                    <h3>➕ Добавить студента</h3>
+                    <form id="studentForm">
+                        <div class="form-row">
+                            <input type="text" id="studUsername" placeholder="Логин" required>
+                            <input type="email" id="studEmail" placeholder="Email" required>
+                            <input type="password" id="studPassword" placeholder="Пароль" required>
+                            <input type="text" id="studFullName" placeholder="ФИО" required>
+                            <select id="studGroupId" required><option value="">Выберите группу</option></select>
+                            <input type="text" id="studCard" placeholder="Номер студенческого" required>
+                            <input type="date" id="studEnrollment" placeholder="Дата зачисления" required>
+                            <input type="text" id="studParentUsername" placeholder="Логин родителя (необязательно)" style="grid-column: span 2;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:15px;">Добавить</button>
+                    </form>
+                </div>
+                <div class="table-container" id="studentsTable"></div>
+            </div>
+
+            <!-- Преподаватели -->
+            <div class="tab-content" id="tab-teachers">
+                <div class="card">
+                    <h3>➕ Добавить преподавателя</h3>
+                    <form id="teacherForm">
+                        <div class="form-row">
+                            <input type="text" id="teachUsername" placeholder="Логин" required>
+                            <input type="email" id="teachEmail" placeholder="Email" required>
+                            <input type="password" id="teachPassword" placeholder="Пароль" required>
+                            <input type="text" id="teachFullName" placeholder="ФИО" required>
+                            <input type="text" id="teachDepartment" placeholder="Кафедра" required>
+                            <input type="text" id="teachPosition" placeholder="Преподаваемый предмет">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:15px;">Добавить</button>
+                    </form>
+                </div>
+                <div class="table-container" id="teachersTable"></div>
+            </div>
+
+            <!-- Предметы -->
+            <div class="tab-content" id="tab-subjects">
+                <div class="card">
+                    <h3>➕ Добавить предмет</h3>
+                    <form id="subjectForm">
+                        <div class="form-row">
+                            <input type="text" id="subjName" placeholder="Название предмета" required>
+                            <select id="subjTeacherId" required><option value="">Выберите преподавателя</option></select>
+                            <select id="subjGroupId" required><option value="">Выберите группу</option></select>
+                            <select id="subjSemester" required><option value="">Семестр</option><option value="1">1 семестр</option><option value="2">2 семестр</option></select>
+                            <input type="number" id="subjHours" placeholder="Количество часов" required style="grid-column: span 2;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="margin-top:15px;">Добавить</button>
+                    </form>
+                </div>
+                <div class="table-container" id="subjectsTable"></div>
+            </div>
+
+            <!-- Родители -->
+<div class="tab-content" id="tab-parents">
+    <div class="card">
+        <h3>➕ Добавить родителя</h3>
+        <form id="parentForm">
+            <div class="form-row">
+                <input type="text" id="parentUsername" placeholder="Логин" required>
+                <input type="email" id="parentEmail" placeholder="Email" required>
+                <input type="password" id="parentPassword" placeholder="Пароль" required>
+                <input type="text" id="parentFullName" placeholder="ФИО" required>
+                <select id="parentStudentIds" multiple style="grid-column: span 2; padding: 12px; border: 2px solid var(--border); border-radius: 8px; min-height: 100px;">
+                    <option value="">Выберите студентов (можно несколько)</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="margin-top:15px;">Добавить</button>
+        </form>
+    </div>
+    <div class="table-container" id="parentsTable"></div>
+</div>
+
+            <!-- Пользователи -->
+            <div class="tab-content" id="tab-users">
+                <div class="table-container" id="usersTable"></div>
+            </div>
+
+                        <!-- Логи -->
+            <div class="tab-content" id="tab-logs">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <select id="logFilterRole" style="padding: 8px; border: 2px solid var(--border); border-radius: 8px;">
+                        <option value="">Все роли</option>
+                        <option value="admin">Администратор</option>
+                        <option value="teacher">Преподаватель</option>
+                        <option value="student">Студент</option>
+                        <option value="parent">Родитель</option>
+                    </select>
+                    <select id="logFilterUser" style="padding: 8px; border: 2px solid var(--border); border-radius: 8px;">
+                        <option value="">Все пользователи</option>
+                    </select>
+                    <select id="logFilterAction" style="padding: 8px; border: 2px solid var(--border); border-radius: 8px;">
+                        <option value="">Все действия</option>
+                        <option value="Выставил">Оценки</option>
+                        <option value="Отметил">Посещаемость</option>
+                        <option value="Создал">Создание</option>
+                        <option value="Удалил">Удаление</option>
+                        <option value="Экспортировал">Экспорт</option>
+                        <option value="Вошёл">Вход</option>
+                        <option value="Изменил">Изменение</option>
+                    </select>
+                    <input type="date" id="logFilterDateFrom" style="padding: 8px; border: 2px solid var(--border); border-radius: 8px;" placeholder="С даты">
+                    <input type="date" id="logFilterDateTo" style="padding: 8px; border: 2px solid var(--border); border-radius: 8px;" placeholder="По дату">
+                    <button id="applyLogFilter" class="btn btn-primary" style="width: auto; padding: 8px 15px;">🔍</button>
+                    <button id="exportLogsBtn" class="btn btn-primary" style="width: auto; padding: 8px 15px;">📥 Excel</button>
+                </div>
+                <div class="table-container" id="logsTable"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/config.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        Auth.checkAuth();
+        const user = Auth.getUser();
+        document.getElementById('sidebarUserName').textContent = user.full_name;
+        if (user.role !== 'admin') { window.location.href = 'dashboard.html'; }
+
+        function showSuccess(msg) { const el = document.getElementById('successMessage'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 3000); }
+        function showError(msg) { const el = document.getElementById('errorMessage'); el.textContent = msg; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 5000); }
+
+        document.getElementById('groupName').addEventListener('input', function() { this.value = Validator.alphanumericPattern(this.value); });
+        document.getElementById('groupFaculty').addEventListener('input', function() { this.value = Validator.alphanumericPattern(this.value); });
+        document.getElementById('studUsername').addEventListener('input', function() { this.value = Validator.usernamePattern(this.value); });
+        document.getElementById('studFullName').addEventListener('input', function() { this.value = Validator.namePattern(this.value); });
+        document.getElementById('studCard').addEventListener('input', function() { this.value = this.value.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\-]/g, ''); });
+        document.getElementById('teachUsername').addEventListener('input', function() { this.value = Validator.usernamePattern(this.value); });
+        document.getElementById('teachFullName').addEventListener('input', function() { this.value = Validator.namePattern(this.value); });
+        document.getElementById('teachDepartment').addEventListener('input', function() { this.value = Validator.alphanumericPattern(this.value); });
+        document.getElementById('teachPosition').addEventListener('input', function() { this.value = Validator.alphanumericPattern(this.value); });
+        document.getElementById('subjName').addEventListener('input', function() { this.value = Validator.alphanumericPattern(this.value); });
+        document.getElementById('exportLogsBtn').addEventListener('click', () => {
+    const uf = document.getElementById('logFilterUser').value;
+    const af = document.getElementById('logFilterAction').value;
+    const df = document.getElementById('logFilterDateFrom').value;
+    const dt = document.getElementById('logFilterDateTo').value;
+    window.open(`${CONFIG.API_URL}/api/reports/audit-logs/excel?username=${encodeURIComponent(uf)}&action=${encodeURIComponent(af)}&date_from=${df}&date_to=${dt}`, '_blank');
+});
+
+        function sortTable(tableId, colIndex) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const isAsc = table.dataset.sortCol == colIndex && table.dataset.sortDir === 'asc';
+            table.dataset.sortCol = colIndex;
+            table.dataset.sortDir = isAsc ? 'desc' : 'asc';
+            rows.sort((a, b) => {
+                let aVal = a.cells[colIndex].textContent.trim();
+                let bVal = b.cells[colIndex].textContent.trim();
+                if (!isNaN(aVal) && !isNaN(bVal)) return isAsc ? bVal - aVal : aVal - bVal;
+                return isAsc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+            });
+            tbody.innerHTML = '';
+            rows.forEach(r => tbody.appendChild(r));
+        }
+
+        let currentLogPage = 1;
+
+        async function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+            if (tabName === 'groups') loadGroups();
+            if (tabName === 'students') { await loadGroupsForSelect(); loadStudents(); }
+            if (tabName === 'teachers') loadTeachers();
+            if (tabName === 'subjects') { await loadTeachersForSelect(); await loadGroupsForSelect(); loadSubjects(); }
+            if (tabName === 'users') loadUsers();
+            if (tabName === 'logs') { currentLogPage = 1; loadUserFilter(); loadLogs(1); }
+            if (tabName === 'parents') { loadStudentsForParentSelect(); loadParents(); }
+        }
+
+        async function loadGroups() {
+            try {
+                const groups = await API.get('/api/admin/groups');
+                document.getElementById('groupsTable').innerHTML = `<table id="tblGroups"><thead><tr><th onclick="sortTable('tblGroups',0)">ID ↕</th><th onclick="sortTable('tblGroups',1)">Название ↕</th><th>Курс</th><th>Факультет</th><th>Действие</th></tr></thead><tbody>${groups.map(g => `<tr><td>${g.id}</td><td>${g.name}</td><td>${g.course}</td><td>${g.faculty}</td><td><button class="btn btn-danger" style="width:auto;padding:6px 12px;" onclick="deleteGroup(${g.id})">Удалить</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка загрузки групп'); }
+        }
+        async function loadGroupsForSelect() {
+            try {
+                const groups = await API.get('/api/admin/groups');
+                ['studGroupId', 'subjGroupId'].forEach(id => { const s = document.getElementById(id); if(s) s.innerHTML = '<option value="">Выберите группу</option>' + groups.map(g => `<option value="${g.id}">${g.name} (курс ${g.course})</option>`).join(''); });
+            } catch(e) {}
+        }
+        async function loadTeachersForSelect() {
+            try {
+                const teachers = await API.get('/api/admin/teachers');
+                const s = document.getElementById('subjTeacherId'); if(s) s.innerHTML = '<option value="">Выберите преподавателя</option>' + teachers.map(t => `<option value="${t.id}">${t.full_name} (${t.department})</option>`).join('');
+            } catch(e) {}
+        }
+        async function deleteGroup(id) { if(!confirm('Удалить?')) return; await API.delete(`/api/admin/groups/${id}`); showSuccess('Удалено'); loadGroups(); }
+        document.getElementById('groupForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await API.post('/api/admin/groups', { name: document.getElementById('groupName').value, course: parseInt(document.getElementById('groupCourse').value), faculty: document.getElementById('groupFaculty').value });
+            showSuccess('Группа создана!'); e.target.reset(); loadGroups();
+        });
+
+        async function loadStudents() {
+            try {
+                const students = await API.get('/api/admin/students');
+                document.getElementById('studentsTable').innerHTML = `<table id="tblStudents"><thead><tr><th onclick="sortTable('tblStudents',0)">ID ↕</th><th onclick="sortTable('tblStudents',1)">ФИО ↕</th><th>Группа</th><th>Билет</th><th>Действие</th></tr></thead><tbody>${students.map(s => `<tr><td>${s.id}</td><td>${s.full_name}</td><td>${s.group_name||'-'}</td><td>${s.student_card_number}</td><td><button class="btn btn-danger" style="width:auto;padding:6px 12px;" onclick="deleteStudent(${s.id})">Удалить</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка'); }
+        }
+        async function deleteStudent(id) { if(!confirm('Удалить?')) return; await API.delete(`/api/admin/students/${id}`); showSuccess('Удалён'); loadStudents(); }
+        document.getElementById('studentForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await API.post('/api/admin/students', {
+                username: document.getElementById('studUsername').value, email: document.getElementById('studEmail').value,
+                password: document.getElementById('studPassword').value, full_name: document.getElementById('studFullName').value,
+                group_id: parseInt(document.getElementById('studGroupId').value), student_card_number: document.getElementById('studCard').value,
+                enrollment_date: document.getElementById('studEnrollment').value, parent_username: document.getElementById('studParentUsername').value || null
+            });
+            showSuccess('Студент добавлен!'); e.target.reset(); loadStudents();
+        });
+
+        async function loadTeachers() {
+            try {
+                const teachers = await API.get('/api/admin/teachers');
+                document.getElementById('teachersTable').innerHTML = `<table id="tblTeachers"><thead><tr><th onclick="sortTable('tblTeachers',0)">ID ↕</th><th onclick="sortTable('tblTeachers',1)">ФИО ↕</th><th>Кафедра</th><th>Предмет</th><th>Действие</th></tr></thead><tbody>${teachers.map(t => `<tr><td>${t.id}</td><td>${t.full_name}</td><td>${t.department}</td><td>${t.position||'-'}</td><td><button class="btn btn-danger" style="width:auto;padding:6px 12px;" onclick="deleteTeacher(${t.id})">Удалить</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка'); }
+        }
+        async function deleteTeacher(id) { if(!confirm('Удалить?')) return; await API.delete(`/api/admin/teachers/${id}`); showSuccess('Удалён'); loadTeachers(); }
+        document.getElementById('teacherForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await API.post('/api/admin/teachers', {
+                username: document.getElementById('teachUsername').value, email: document.getElementById('teachEmail').value,
+                password: document.getElementById('teachPassword').value, full_name: document.getElementById('teachFullName').value,
+                department: document.getElementById('teachDepartment').value, position: document.getElementById('teachPosition').value || null
+            });
+            showSuccess('Добавлен!'); e.target.reset(); loadTeachers();
+        });
+
+        async function loadSubjects() {
+            try {
+                const subjects = await API.get('/api/admin/subjects');
+                document.getElementById('subjectsTable').innerHTML = `<table id="tblSubjects"><thead><tr><th onclick="sortTable('tblSubjects',0)">ID ↕</th><th onclick="sortTable('tblSubjects',1)">Название ↕</th><th>Преподаватель</th><th>Группа</th><th>Семестр</th><th>Часы</th><th>Действие</th></tr></thead><tbody>${subjects.map(s => `<tr><td>${s.id}</td><td>${s.name}</td><td>${s.teacher_name||'-'}</td><td>${s.group_name||'-'}</td><td>${s.semester}</td><td>${s.hours}</td><td><button class="btn btn-danger" style="width:auto;padding:6px 12px;" onclick="deleteSubject(${s.id})">Удалить</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка'); }
+        }
+        async function deleteSubject(id) { if(!confirm('Удалить?')) return; await API.delete(`/api/admin/subjects/${id}`); showSuccess('Удалён'); loadSubjects(); }
+        document.getElementById('subjectForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await API.post('/api/admin/subjects', {
+                name: document.getElementById('subjName').value, teacher_id: parseInt(document.getElementById('subjTeacherId').value),
+                group_id: parseInt(document.getElementById('subjGroupId').value), semester: parseInt(document.getElementById('subjSemester').value),
+                hours: parseInt(document.getElementById('subjHours').value)
+            });
+            showSuccess('Добавлен!'); e.target.reset(); loadSubjects();
+        });
+
+        async function loadUsers() {
+            try {
+                const users = await API.get('/api/admin/users');
+                document.getElementById('usersTable').innerHTML = `<table id="tblUsers"><thead><tr><th onclick="sortTable('tblUsers',0)">ID ↕</th><th onclick="sortTable('tblUsers',1)">Логин ↕</th><th>Email</th><th>ФИО</th><th>Роль</th></tr></thead><tbody>${users.map(u => `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.email}</td><td>${u.full_name}</td><td><span class="badge ${u.role==='admin'?'badge-excused':u.role==='teacher'?'badge-present':u.role==='student'?'badge-late':'badge-absent'}">${u.role}</span></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка'); }
+        }
+
+        async function loadUserFilter() {
+            try {
+                const users = await API.get('/api/admin/users');
+                const select = document.getElementById('logFilterUser');
+                select.innerHTML = '<option value="">Все пользователи</option>' +
+                    users.map(u => `<option value="${u.full_name}">${u.full_name} (${u.role})</option>`).join('');
+            } catch(e) {}
+        }
+
+                        async function loadUserFilter(roleFilter = '') {
+            try {
+                const users = await API.get('/api/admin/users');
+                const select = document.getElementById('logFilterUser');
+                let filtered = users;
+                if (roleFilter) {
+                    filtered = users.filter(u => u.role === roleFilter);
+                }
+                select.innerHTML = '<option value="">Все пользователи</option>' +
+                    filtered.map(u => `<option value="${u.full_name}">${u.full_name} (${u.role})</option>`).join('');
+            } catch(e) {}
+        }
+
+                async function loadLogs(page = 1) {
+            try {
+                currentLogPage = page;
+                const role = document.getElementById('logFilterRole').value;
+                const uf = document.getElementById('logFilterUser').value;
+                const af = document.getElementById('logFilterAction').value;
+                const df = document.getElementById('logFilterDateFrom').value;
+                const dt = document.getElementById('logFilterDateTo').value;
+                let url = `/api/reports/audit-logs?username=${encodeURIComponent(uf)}&action=${encodeURIComponent(af)}&date_from=${df}&date_to=${dt}&page=1&page_size=1000`;
+                const result = await API.get(url);
+                let logs = result.data;
+                if (role) {
+                    const roleMap = { admin: 'ADMIN', teacher: 'TEACHER', student: 'STUDENT', parent: 'PARENT' };
+                    const searchRole = roleMap[role] || role.toUpperCase();
+                    logs = logs.filter(l => l.details && l.details.toUpperCase().includes('USERROLE.' + searchRole));
+                }
+
+                let html = `<table id="tblLogs"><thead><tr><th onclick="sortTable('tblLogs',0)">ID ↕</th><th onclick="sortTable('tblLogs',1)">Пользователь ↕</th><th onclick="sortTable('tblLogs',2)">Действие ↕</th><th>Детали</th><th onclick="sortTable('tblLogs',4)">Дата ↕</th></tr></thead><tbody>`;
+                logs.forEach(l => {
+                    html += `<tr><td>${l.id}</td><td><strong>${l.username}</strong></td><td><span class="badge badge-present">${l.action}</span></td><td>${l.details||'-'}</td><td>${new Date(l.created_at).toLocaleString('ru-RU')}</td></tr>`;
+                });
+                html += `</tbody></table>`;
+                html += `<div style="text-align:center;margin-top:5px;color:var(--text-light);">Всего по фильтру: ${logs.length} записей</div>`;
+
+                document.getElementById('logsTable').innerHTML = html;
+            } catch(e) { showError('Ошибка загрузки логов'); }
+        }
+
+        document.getElementById('applyLogFilter').addEventListener('click', () => loadLogs(1));
+        document.getElementById('exportLogsBtn').addEventListener('click', () => {
+            const uf = document.getElementById('logFilterUser').value;
+            const af = document.getElementById('logFilterAction').value;
+            const df = document.getElementById('logFilterDateFrom').value;
+            const dt = document.getElementById('logFilterDateTo').value;
+            window.open(`${CONFIG.API_URL}/api/reports/audit-logs/excel?username=${encodeURIComponent(uf)}&action=${encodeURIComponent(af)}&date_from=${df}&date_to=${dt}`, '_blank');
+        });
+        document.getElementById('logFilterRole').addEventListener('change', function() {
+            loadUserFilter(this.value);
+        });
+
+async function loadStudentsForParentSelect() {
+    try {
+        const students = await API.get('/api/admin/students');
+        const select = document.getElementById('parentStudentIds');
+        select.innerHTML = students.map(s => `<option value="${s.user_id}">${s.full_name} (${s.group_name})</option>`).join('');
+    } catch(e) {}
+}
+
+        async function loadParents() {
+            try {
+                const parents = await API.get('/api/admin/parents');
+                document.getElementById('parentsTable').innerHTML = `<table><thead><tr><th>ID</th><th>Логин</th><th>ФИО</th><th>Email</th><th>Детей</th><th>Дети</th><th>Действие</th></tr></thead><tbody>${parents.map(p => `<tr><td>${p.id}</td><td>${p.username}</td><td>${p.full_name}</td><td>${p.email}</td><td>${p.children_count}</td><td>${p.children.map(c => c.name).join(', ') || '-'}</td><td><button class="btn btn-danger" style="width:auto;padding:6px 12px;" onclick="deleteParent(${p.id})">Удалить</button></td></tr>`).join('')}</tbody></table>`;
+            } catch(e) { showError('Ошибка'); }
+        }
+
+                async function deleteParent(id) {
+            if(!confirm('Удалить родителя?')) return;
+            try {
+                const token = localStorage.getItem('access_token');
+                await fetch(`${CONFIG.API_URL}/api/admin/users/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                showSuccess('Удалён');
+                loadParents();
+            } catch(e) { showError('Ошибка удаления'); }
+        }
+
+        async function loadStudentsForParentSelect() {
+            try {
+                const students = await API.get('/api/admin/students');
+                const select = document.getElementById('parentStudentIds');
+                if (select) {
+                    select.innerHTML = students.map(s => `<option value="${s.user_id}">${s.full_name} (${s.group_name})</option>`).join('');
+                }
+            } catch(e) {}
+        }
+
+        document.getElementById('parentForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const token = localStorage.getItem('access_token');
+            const selectedStudents = Array.from(document.getElementById('parentStudentIds').selectedOptions).map(o => o.value).join(',');
+            const params = new URLSearchParams({
+                username: document.getElementById('parentUsername').value,
+                email: document.getElementById('parentEmail').value,
+                password: document.getElementById('parentPassword').value,
+                full_name: document.getElementById('parentFullName').value,
+                student_user_ids: selectedStudents
+            });
+            try {
+                const response = await fetch(`${CONFIG.API_URL}/api/admin/parents?${params}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    showSuccess('Родитель добавлен!');
+                    e.target.reset();
+                    loadParents();
+                } else {
+                    const err = await response.json();
+                    showError(err.detail || 'Ошибка');
+                }
+            } catch(err) {
+                showError('Ошибка соединения');
+            }
+        });
+
+        document.getElementById('applyLogFilter').addEventListener('click', () => loadLogs(1));
+        document.getElementById('exportLogsBtn').addEventListener('click', () => {
+            const uf = document.getElementById('logFilterUser').value;
+            const af = document.getElementById('logFilterAction').value;
+            const df = document.getElementById('logFilterDateFrom').value;
+            const dt = document.getElementById('logFilterDateTo').value;
+            window.open(`${CONFIG.API_URL}/api/reports/audit-logs/excel?username=${encodeURIComponent(uf)}&action=${encodeURIComponent(af)}&date_from=${df}&date_to=${dt}`, '_blank');
+        });
+        document.getElementById('logFilterRole').addEventListener('change', function() {
+            loadUserFilter(this.value);
+        });
+
+        loadGroups();
+    </script>
+    <script src="../js/theme.js"></script>
+</body>
+</html>

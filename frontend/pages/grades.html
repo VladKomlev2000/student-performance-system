@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценки</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <h2>📚 Успеваемость</h2>
+            <div class="user-info">
+                <div class="user-name" id="sidebarUserName"></div>
+                <div class="user-role" id="sidebarUserRole"></div>
+            </div>
+            <ul class="nav-menu" id="navMenu"></ul>
+            <button class="logout-btn" onclick="Auth.logout()">🚪 Выйти</button>
+        </aside>
+        <main class="main-content">
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h1>Оценки</h1>
+                <button id="exportGradesBtn" class="btn btn-primary" style="width:auto;padding:10px 20px;">📥 Скачать Excel</button>
+            </div>
+            <div class="success-message" id="successMessage"></div>
+            <div class="error-message" id="errorMessage"></div>
+            <div id="teacherForm" style="display:none;background:var(--card-bg);padding:25px;border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:25px;">
+                <h3 style="margin-bottom:20px;color:var(--primary);">➕ Добавить оценку</h3>
+                <form id="gradeForm" style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                    <select id="gradeStudentId" required style="padding:12px;border:2px solid var(--border);border-radius:8px;"><option value="">Выберите студента</option></select>
+                    <select id="gradeSubjectId" required style="padding:12px;border:2px solid var(--border);border-radius:8px;"><option value="">Выберите предмет</option></select>
+                    <select id="gradeValue" required style="padding:12px;border:2px solid var(--border);border-radius:8px;"><option value="">Оценка</option><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option></select>
+                    <select id="gradeType" required style="padding:12px;border:2px solid var(--border);border-radius:8px;"><option value="">Тип</option><option value="exam">Экзамен</option><option value="test">Зачёт</option><option value="coursework">Курсовая</option><option value="practice">Практика</option></select>
+                    <input type="text" id="gradeComment" placeholder="Комментарий" style="padding:12px;border:2px solid var(--border);border-radius:8px;grid-column:span 2;">
+                    <button type="submit" class="btn btn-primary" style="grid-column:span 2;">✅ Добавить</button>
+                </form>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+                <select id="filterSubjectGrade" style="padding:10px;border:2px solid var(--border);border-radius:8px;"><option value="">Все предметы</option></select>
+                <input type="date" id="filterDateFromGrade" style="padding:10px;border:2px solid var(--border);border-radius:8px;">
+                <input type="date" id="filterDateToGrade" style="padding:10px;border:2px solid var(--border);border-radius:8px;">
+                <button id="applyGradeFilter" class="btn btn-primary" style="width:auto;padding:10px 15px;">🔍</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>ID</th><th>Студент</th><th>Предмет</th><th>Оценка</th><th>Тип</th><th>Дата</th><th>Комментарий</th><th>Действие</th></tr></thead>
+                    <tbody id="gradesTableBody"><tr><td colspan="8" style="text-align:center;">Загрузка...</td></tr></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script src="../js/config.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        Auth.checkAuth();
+        const user = Auth.getUser();
+        const token = localStorage.getItem('access_token');
+        if (!token) { window.location.href = 'login.html'; }
+
+        document.getElementById('sidebarUserName').textContent = user.full_name;
+        document.getElementById('sidebarUserRole').textContent = user.role==='admin'?'Администратор':user.role==='teacher'?'Преподаватель':'Студент';
+
+        // Меню
+        let menu = '<li><a href="dashboard.html"><span class="icon">📊</span> Главная</a></li>';
+        menu += '<li><a href="grades.html" class="active"><span class="icon">📝</span> Оценки</a></li>';
+        menu += '<li><a href="attendance.html"><span class="icon">📋</span> Посещаемость</a></li>';
+        if (user.role === 'teacher') menu += '<li><a href="reports.html"><span class="icon">📈</span> Ведомость</a></li>';
+        document.getElementById('navMenu').innerHTML = menu;
+
+        if (user.role === 'teacher') {
+    document.getElementById('teacherForm').style.display = 'block';
+    loadStudentsForSelect();
+    loadSubjectsForSelect();
+}
+loadSubjectsForFilter();
+
+        document.getElementById('exportGradesBtn').addEventListener('click', () => {
+            window.open(`${CONFIG.API_URL}/api/export/grades?token=${encodeURIComponent(token)}`, '_blank');
+        });
+
+        async function loadStudentsForSelect() {
+            const s = await API.get('/api/admin/students');
+            document.getElementById('gradeStudentId').innerHTML = '<option value="">Выберите студента</option>' + s.map(x => `<option value="${x.id}">${x.full_name} (гр. ${x.group_name})</option>`).join('');
+        }
+        async function loadSubjectsForSelect() {
+            const s = user.role==='teacher' ? await API.get('/api/grades/teacher/subjects') : await API.get('/api/admin/subjects');
+            document.getElementById('gradeSubjectId').innerHTML = '<option value="">Выберите предмет</option>' + s.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+        }
+        async function loadSubjectsForFilter() {
+            const s = user.role==='teacher' ? await API.get('/api/grades/teacher/subjects') : await API.get('/api/admin/subjects');
+            document.getElementById('filterSubjectGrade').innerHTML = '<option value="">Все предметы</option>' + s.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+        }
+
+        async function loadGrades(gradesData = null) {
+            const tbody = document.getElementById('gradesTableBody');
+            try {
+                let grades = gradesData || await API.get(user.role==='teacher'?'/api/grades/teacher/my':`/api/grades/student/${user.id}`);
+                const fs = document.getElementById('filterSubjectGrade').value;
+                const fd = document.getElementById('filterDateFromGrade').value;
+                const ft = document.getElementById('filterDateToGrade').value;
+                if (fs) grades = grades.filter(g => g.subject_id == fs);
+                if (fd) grades = grades.filter(g => g.date && g.date >= fd);
+                if (ft) grades = grades.filter(g => g.date && g.date <= ft);
+                if (!grades || grades.length === 0) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Оценок пока нет</td></tr>'; return; }
+                const isTeacher = user.role === 'teacher';
+                tbody.innerHTML = grades.map(g => `<tr><td>${g.id}</td><td>${g.student_name||'ID:'+g.student_id}</td><td>${g.subject_name||'ID:'+g.subject_id}</td><td><span class="${g.value>=5?'grade-excellent':g.value>=4?'grade-good':g.value>=3?'grade-satisfactory':'grade-poor'}">${g.value}</span></td><td>${g.type==='exam'?'Экзамен':g.type==='test'?'Зачёт':g.type==='coursework'?'Курсовая':'Практика'}</td><td>${g.date?new Date(g.date).toLocaleDateString('ru-RU'):'-'}</td><td>${g.comment||'-'}</td>${isTeacher?`<td><button class="btn btn-danger" style="width:auto;padding:4px 10px;font-size:12px;" onclick="deleteGrade(${g.id})">🗑️</button></td>`:'<td></td>'}</tr>`).join('');
+            } catch(e) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:red;">Ошибка загрузки</td></tr>'; }
+        }
+
+        document.getElementById('applyGradeFilter').addEventListener('click', () => loadGrades());
+        document.getElementById('gradeForm')?.addEventListener('submit', async e => {
+            e.preventDefault();
+            await API.post('/api/grades/', { student_id: parseInt(document.getElementById('gradeStudentId').value), subject_id: parseInt(document.getElementById('gradeSubjectId').value), value: parseInt(document.getElementById('gradeValue').value), type: document.getElementById('gradeType').value, comment: document.getElementById('gradeComment').value || null });
+            document.getElementById('successMessage').textContent = '✅ Оценка добавлена!'; document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('gradeForm').reset(); loadGrades();
+            setTimeout(() => document.getElementById('successMessage').style.display = 'none', 3000);
+        });
+
+        async function deleteGrade(id) {
+            if (!confirm('Удалить?')) return;
+            await fetch(`${CONFIG.API_URL}/api/grades/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
+            document.getElementById('successMessage').textContent = '🗑️ Удалена!'; document.getElementById('successMessage').style.display = 'block';
+            loadGrades();
+            setTimeout(() => document.getElementById('successMessage').style.display = 'none', 3000);
+        }
+        loadGrades();
+    </script>
+<script src="../js/theme.js"></script>
+</body>
+</html>

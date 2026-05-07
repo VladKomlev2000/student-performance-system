@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель родителя</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-container {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .chart-container h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: var(--text);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <h2>📚 Успеваемость</h2>
+            <div class="user-info">
+                <div class="user-name" id="sidebarUserName"></div>
+                <div class="user-role" id="sidebarUserRole">Родитель</div>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="parent.html" class="active"><span class="icon">👨‍👩‍👧</span> Мой ребёнок</a></li>
+            </ul>
+            <button class="logout-btn" onclick="Auth.logout()">🚪 Выйти</button>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>Успеваемость ребёнка</h1>
+                <div>
+                    <button id="exportGradesBtn" class="btn btn-primary" style="width: auto; padding: 10px 20px; margin-right: 10px;">📥 Оценки Excel</button>
+                    <button id="exportAttendanceBtn" class="btn btn-primary" style="width: auto; padding: 10px 20px;">📥 Посещаемость Excel</button>
+                </div>
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Информация о ребёнке -->
+            <div class="stats-grid" id="childInfo"></div>
+
+            <!-- Средний балл -->
+            <div class="stats-grid" id="averageGrade"></div>
+
+            <!-- Уведомление о проблемах -->
+            <div id="alertBox" style="display:none; background: #fff3cd; border-left: 4px solid #f39c12; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <strong>⚠️ Внимание!</strong> <span id="alertText"></span>
+            </div>
+
+            <!-- График посещаемости -->
+            <div class="chart-container" id="attendanceChartContainer" style="display:none;">
+                <h3>📊 Посещаемость ребёнка</h3>
+                <canvas id="parentAttendanceChart"></canvas>
+            </div>
+
+            <!-- Оценки -->
+            <div class="table-container" style="margin-bottom: 30px;">
+                <h3 style="padding: 20px;">📝 Оценки</h3>
+                <table>
+                    <thead>
+                        <tr><th>Предмет</th><th>Оценка</th><th>Тип</th><th>Дата</th><th>Комментарий</th></tr>
+                    </thead>
+                    <tbody id="gradesTableBody">
+                        <tr><td colspan="5" style="text-align:center;">Загрузка...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Посещаемость -->
+            <div class="table-container">
+                <h3 style="padding: 20px;">📋 Посещаемость</h3>
+                <table>
+                    <thead>
+                        <tr><th>Предмет</th><th>Дата</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody id="attendanceTableBody">
+                        <tr><td colspan="3" style="text-align:center;">Загрузка...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+    Auth.checkAuth();
+
+    const user = Auth.getUser();
+    document.getElementById('sidebarUserName').textContent = user.full_name;
+
+    if (user.role !== 'parent') {
+        window.location.href = 'dashboard.html';
+    }
+
+    const statusMap = {
+        'present': 'Присутствовал',
+        'absent': 'Отсутствовал',
+        'late': 'Опоздал',
+        'excused': 'Уважительная'
+    };
+
+    let attendanceChart = null;
+
+    // ====== ЭКСПОРТ ======
+    document.getElementById('exportGradesBtn').addEventListener('click', async () => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${CONFIG.API_URL}/api/export/grades?token=${encodeURIComponent(token)}`);
+            if (!response.ok) throw new Error('Ошибка');
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'grades.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('Ошибка скачивания: ' + e.message);
+        }
+    });
+
+    document.getElementById('exportAttendanceBtn').addEventListener('click', async () => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${CONFIG.API_URL}/api/export/attendance?token=${encodeURIComponent(token)}`);
+            if (!response.ok) throw new Error('Ошибка');
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'attendance.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('Ошибка скачивания: ' + e.message);
+        }
+    });
+
+    // ====== ГРАФИК ======
+    function drawChart(present, absent, late, excused) {
+        const canvas = document.getElementById('parentAttendanceChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        if (attendanceChart) attendanceChart.destroy();
+
+        const total = present + absent + late + excused;
+        if (total === 0) {
+            document.getElementById('attendanceChartContainer').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('attendanceChartContainer').style.display = 'block';
+
+        attendanceChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Присутствовал', 'Отсутствовал', 'Опоздал', 'Уваж. причина'],
+                datasets: [{
+                    data: [present, absent, late, excused],
+                    backgroundColor: ['#2ecc71', '#e74c3c', '#f39c12', '#3498db'],
+                    borderColor: '#ffffff',
+                    borderWidth: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, font: { size: 12 }, usePointStyle: true }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+    }
+
+    // ====== ЗАГРУЗКА ДАННЫХ ======
+    async function loadChildInfo() {
+        try {
+            const info = await API.get('/api/parent/child/info');
+            document.getElementById('childInfo').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${info.full_name}</div>
+                    <div class="stat-label">ФИО студента</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${info.group_name}</div>
+                    <div class="stat-label">Группа</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${info.student_card}</div>
+                    <div class="stat-label">Студенческий билет</div>
+                </div>
+            `;
+        } catch (error) {
+            document.getElementById('errorMessage').textContent = error.message;
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+    }
+
+    async function loadGrades() {
+        try {
+            const grades = await API.get('/api/parent/child/grades');
+            const tbody = document.getElementById('gradesTableBody');
+
+            if (grades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Оценок пока нет</td></tr>';
+            } else {
+                tbody.innerHTML = grades.map(g => `
+                    <tr>
+                        <td>${g.subject_name || 'ID:' + g.subject_id}</td>
+                        <td><span class="${g.value >= 5 ? 'grade-excellent' : g.value >= 4 ? 'grade-good' : g.value >= 3 ? 'grade-satisfactory' : 'grade-poor'}">${g.value}</span></td>
+                        <td>${g.type === 'exam' ? 'Экзамен' : g.type === 'test' ? 'Зачёт' : g.type}</td>
+                        <td>${g.date ? new Date(g.date).toLocaleDateString('ru-RU') : '-'}</td>
+                        <td>${g.comment || '-'}</td>
+                    </tr>
+                `).join('');
+
+                const badGrades = grades.filter(g => g.value <= 2);
+                if (badGrades.length > 0) {
+                    document.getElementById('alertBox').style.display = 'block';
+                    document.getElementById('alertText').textContent = `У ребёнка ${badGrades.length} неудовлетворительных оценок!`;
+                }
+            }
+
+            const avg = await API.get('/api/parent/child/grades/average');
+            document.getElementById('averageGrade').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${avg.average_grade}</div>
+                    <div class="stat-label">Средний балл</div>
+                </div>
+            `;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function loadAttendance() {
+        try {
+            const records = await API.get('/api/parent/child/attendance');
+            const tbody = document.getElementById('attendanceTableBody');
+
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Записей пока нет</td></tr>';
+                drawChart(0, 0, 0, 0);
+            } else {
+                tbody.innerHTML = records.map(r => `
+                    <tr>
+                        <td>${r.subject_name || 'ID:' + r.subject_id}</td>
+                        <td>${r.date ? new Date(r.date).toLocaleDateString('ru-RU') : '-'}</td>
+                        <td><span class="badge badge-${r.status}">${statusMap[r.status] || r.status}</span></td>
+                    </tr>
+                `).join('');
+
+                const present = records.filter(r => r.status === 'present').length;
+                const absent = records.filter(r => r.status === 'absent').length;
+                const late = records.filter(r => r.status === 'late').length;
+                const excused = records.filter(r => r.status === 'excused').length;
+
+                drawChart(present, absent, late, excused);
+
+                if (absent > 3) {
+                    document.getElementById('alertBox').style.display = 'block';
+                    document.getElementById('alertText').textContent = `У ребёнка ${absent} пропусков занятий!`;
+                }
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+document.getElementById('sidebarUserRole').textContent = 'Родитель';
+    loadChildInfo();
+    loadGrades();
+    loadAttendance();
+</script>
+<script src="../js/theme.js"></script>
+</body>
+</html>
