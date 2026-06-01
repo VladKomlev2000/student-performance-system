@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from datetime import date
@@ -7,12 +7,12 @@ from ..database import get_db
 from ..models.grade import Grade
 from ..models.student import Student
 from ..models.user import User
-from ..models.group import Group
+from ..models.group import Class
 from ..models.subject import Subject
 from ..models.teacher import Teacher
 from ..models.attendance import Attendance
 from ..utils.security import verify_token
-from ..services.export_service import export_grades_to_excel
+from ..services.export_service import export_grades_to_excel, export_class_report_to_word, export_logs_to_word
 
 router = APIRouter()
 
@@ -32,27 +32,27 @@ def get_stats(db: Session = Depends(get_db)):
     return {
         "students": db.query(Student).count(),
         "teachers": db.query(Teacher).count(),
-        "groups": db.query(Group).count(),
+        "groups": db.query(Class).count(),
         "subjects": db.query(Subject).count(),
         "grades": db.query(Grade).count(),
         "attendance": db.query(Attendance).count()
     }
 
 
-@router.get("/group-report")
-def get_group_report(
+@router.get("/class-report")
+def get_class_report(
         group_id: int,
         subject_id: int,
         date_from: str = None,
         date_to: str = None,
         db: Session = Depends(get_db)
 ):
-    group = db.query(Group).filter(Group.id == group_id).first()
+    cls = db.query(Class).filter(Class.id == group_id).first()
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
-    if not group or not subject:
-        raise HTTPException(status_code=404, detail="Группа или предмет не найдены")
+    if not cls or not subject:
+        raise HTTPException(status_code=404, detail="Класс или предмет не найдены")
 
-    students = db.query(Student).filter(Student.group_id == group_id).all()
+    students = db.query(Student).filter(Student.class_id == group_id).all()
     result = []
     for student in students:
         user = db.query(User).filter(User.id == student.user_id).first()
@@ -64,37 +64,86 @@ def get_group_report(
         result.append({
             "student_id": student.id,
             "student_name": user.full_name if user else "-",
-            "student_card": student.student_card_number,
-            "grades": [{"id": g.id, "value": g.value, "type": g.type, "date": g.date.isoformat() if g.date else None, "comment": g.comment} for g in grades],
+            "grades": [{"id": g.id, "value": g.value, "type": g.type, "date": g.date.isoformat() if g.date else None,
+                        "comment": g.comment} for g in grades],
             "average": round(avg, 2),
             "total_grades": len(grades)
         })
-    return {"group_name": group.name, "subject_name": subject.name, "students": result}
+    return {"group_name": cls.name, "subject_name": subject.name, "students": result}
 
 
-@router.get("/group-report/excel")
-def export_group_report(group_id: int, subject_id: int, date_from: str = None, date_to: str = None, db: Session = Depends(get_db)):
-    group = db.query(Group).filter(Group.id == group_id).first()
+def _get_class_report_data(group_id: int, subject_id: int, date_from: str, date_to: str, db: Session):
+    """Общая логика получения данных ведомости."""
+    cls = db.query(Class).filter(Class.id == group_id).first()
     subject = db.query(Subject).filter(Subject.id == subject_id).first()
-    if not group or not subject:
-        raise HTTPException(status_code=404, detail="Группа или предмет не найдены")
+    if not cls or not subject:
+        raise HTTPException(status_code=404, detail="Класс или предмет не найдены")
 
-    students = db.query(Student).filter(Student.group_id == group_id).all()
+    students = db.query(Student).filter(Student.class_id == group_id).all()
+    result = []
     all_grades = []
     for student in students:
         user = db.query(User).filter(User.id == student.user_id).first()
         query = db.query(Grade).filter(Grade.student_id == student.id, Grade.subject_id == subject_id)
         if date_from: query = query.filter(Grade.date >= date_from)
         if date_to: query = query.filter(Grade.date <= date_to)
-        for g in query.all():
-            all_grades.append({"value": g.value, "type": g.type, "date": g.date, "comment": g.comment, "student_name": user.full_name if user else "-", "subject_name": subject.name})
+        grades = query.order_by(Grade.date.desc()).all()
+        avg = sum(g.value for g in grades) / len(grades) if grades else 0
+        result.append({
+            "student_id": student.id,
+            "student_name": user.full_name if user else "-",
+            "grades": [{"id": g.id, "value": g.value, "type": g.type, "date": g.date.isoformat() if g.date else None,
+                        "comment": g.comment} for g in grades],
+            "average": round(avg, 2),
+            "total_grades": len(grades)
+        })
+        for g in grades:
+            all_grades.append({
+                "value": g.value, "type": g.type, "date": g.date,
+                "comment": g.comment,
+                "student_name": user.full_name if user else "-",
+                "subject_name": subject.name
+            })
 
-    excel_file = export_grades_to_excel(all_grades, f"{group.name} - {subject.name}")
-    return StreamingResponse(excel_file, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=vedomost.xlsx', 'Access-Control-Allow-Origin': '*'})
+    report = {"group_name": cls.name, "subject_name": subject.name, "students": result}
+    return report, all_grades, cls, subject
+
+
+@router.get("/group-report/excel")
+def export_class_report(
+        group_id: int,
+        subject_id: int,
+        date_from: str = None,
+        date_to: str = None,
+        format: str = Query("excel", description="Формат: excel или word"),
+        db: Session = Depends(get_db)
+):
+    report, all_grades, cls, subject = _get_class_report_data(group_id, subject_id, date_from, date_to, db)
+
+    if format == "word":
+        file_data = export_class_report_to_word(report)
+        filename = f"vedomost_{cls.name}_{subject.name}.docx"
+        media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    else:
+        file_data = export_grades_to_excel(all_grades, f"{cls.name} - {subject.name}")
+        filename = "vedomost.xlsx"
+        media_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    safe_filename = "".join(c if c.isascii() and c.isalnum() else "_" for c in filename)
+
+    return StreamingResponse(
+        file_data,
+        media_type=media_type,
+        headers={
+            'Content-Disposition': f'attachment; filename={safe_filename}',
+            'Access-Control-Allow-Origin': '*'
+        }
+    )
 
 
 @router.get("/audit-logs")
-def get_audit_logs(username: str = None, action: str = None, date_from: str = None, date_to: str = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db)):
+def get_audit_logs(username: str = None, action: str = None, date_from: str = None, date_to: str = None, page: int = 1,
+                   page_size: int = 20, db: Session = Depends(get_db)):
     from ..models.audit_log import AuditLog
     query = db.query(AuditLog)
     if username: query = query.filter(AuditLog.username.ilike(f"%{username}%"))
@@ -102,16 +151,38 @@ def get_audit_logs(username: str = None, action: str = None, date_from: str = No
     if date_from: query = query.filter(AuditLog.created_at >= date_from)
     if date_to: query = query.filter(AuditLog.created_at <= date_to)
     total = query.count()
-    logs = query.order_by(AuditLog.created_at.desc()).offset((page-1)*page_size).limit(page_size).all()
+    logs = query.order_by(AuditLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return {
         "total": total, "page": page, "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
-        "data": [{"id": l.id, "user_id": l.user_id, "username": l.username, "action": l.action, "details": l.details, "created_at": l.created_at.isoformat() if l.created_at else None} for l in logs]
+        "data": [{"id": l.id, "user_id": l.user_id, "username": l.username, "action": l.action, "details": l.details,
+                  "created_at": l.created_at.isoformat() if l.created_at else None} for l in logs]
     }
 
 
+@router.get("/audit-logs/word")
+def export_audit_logs_word(username: str = None, action: str = None, date_from: str = None, date_to: str = None,
+                           db: Session = Depends(get_db)):
+    from ..models.audit_log import AuditLog
+
+    query = db.query(AuditLog)
+    if username: query = query.filter(AuditLog.username.ilike(f"%{username}%"))
+    if action: query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+    if date_from: query = query.filter(AuditLog.created_at >= date_from)
+    if date_to: query = query.filter(AuditLog.created_at <= date_to)
+
+    logs = query.order_by(AuditLog.created_at.desc()).all()
+    file_data = export_logs_to_word(logs)
+
+    return StreamingResponse(file_data,
+                             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                             headers={'Content-Disposition': 'attachment; filename=logs.docx',
+                                      'Access-Control-Allow-Origin': '*'})
+
+
 @router.get("/audit-logs/excel")
-def export_audit_logs(username: str = None, action: str = None, date_from: str = None, date_to: str = None, db: Session = Depends(get_db)):
+def export_audit_logs(username: str = None, action: str = None, date_from: str = None, date_to: str = None,
+                      db: Session = Depends(get_db)):
     from ..models.audit_log import AuditLog
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
@@ -154,4 +225,5 @@ def export_audit_logs(username: str = None, action: str = None, date_from: str =
     wb.save(output)
     output.seek(0)
 
-    return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers={'Content-Disposition': 'attachment; filename=logs.xlsx'})
+    return StreamingResponse(output, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                             headers={'Content-Disposition': 'attachment; filename=logs.xlsx'})

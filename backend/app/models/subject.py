@@ -9,8 +9,8 @@ class Subject(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    semester = Column(Integer, nullable=False)  # 1 или 2
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    quarter = Column(Integer, nullable=False)  # 1-4 четверть
     hours = Column(Integer)  # Количество часов
 
     teacher = relationship("Teacher", back_populates="subjects")

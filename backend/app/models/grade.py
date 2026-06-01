@@ -12,9 +12,9 @@ class Grade(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
     teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
     value = Column(Integer, nullable=False)  # Оценка 2-5
-    type = Column(String(20), nullable=False)  # "exam", "test", "coursework", "practice"
+    type = Column(String(20), nullable=False)  # "exam", "practice", "vpr", "control", "independent", "dictation", "test", "board_answer", "homework"
     date = Column(DateTime, default=datetime.utcnow)
-    comment = Column(String(255))  # Комментарий преподавателя
+    comment = Column(String(255))  # Комментарий учителя
 
     student = relationship("Student", back_populates="grades")
     subject = relationship("Subject", back_populates="grades")

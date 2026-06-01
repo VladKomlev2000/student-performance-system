@@ -4,7 +4,7 @@ from datetime import date
 from ..database import get_db
 from ..services.attendance_service import (
     mark_attendance, get_student_attendance,
-    get_group_attendance, get_attendance_stats
+    get_class_attendance, get_attendance_stats
 )
 from ..schemas.attendance import AttendanceCreate, AttendanceResponse, AttendanceStats
 from ..utils.security import verify_token
@@ -30,12 +30,12 @@ def create_attendance(
 ):
     user_id, role = get_current_user(authorization)
     if role != "teacher":
-        raise HTTPException(status_code=403, detail="Только преподаватель может отмечать посещаемость")
+        raise HTTPException(status_code=403, detail="Только учитель может отмечать посещаемость")
 
     from ..models.teacher import Teacher
     teacher = db.query(Teacher).filter(Teacher.user_id == user_id).first()
     if not teacher:
-        raise HTTPException(status_code=404, detail="Преподаватель не найден")
+        raise HTTPException(status_code=404, detail="Учитель не найден")
 
     record = mark_attendance(
         db=db,
@@ -53,7 +53,7 @@ def create_attendance(
     status_map = {'present': 'Присутствовал', 'absent': 'Отсутствовал', 'late': 'Опоздал', 'excused': 'Уваж. причина'}
     log_action(db, user_id, user.full_name if user else str(user_id),
                "Отметил посещаемость",
-               f"Студент ID:{attendance_data.student_id}, Предмет ID:{attendance_data.subject_id}, Статус:{status_map.get(attendance_data.status, attendance_data.status)}")
+               f"Ученик ID:{attendance_data.student_id}, Предмет ID:{attendance_data.subject_id}, Статус:{status_map.get(attendance_data.status, attendance_data.status)}")
 
     return record
 
@@ -92,7 +92,7 @@ def get_student_attendance_route(student_id: int, subject_id: int = None, db: Se
 def get_my_attendance(authorization: str = Header(None), db: Session = Depends(get_db)):
     user_id, role = get_current_user(authorization)
     if role != "teacher":
-        raise HTTPException(status_code=403, detail="Только для преподавателя")
+        raise HTTPException(status_code=403, detail="Только для учителя")
 
     from ..models.teacher import Teacher
     from ..models.attendance import Attendance
@@ -123,9 +123,9 @@ def get_my_attendance(authorization: str = Header(None), db: Session = Depends(g
     return result
 
 
-@router.get("/group/{group_id}/subject/{subject_id}")
-def get_group_attendance_route(group_id: int, subject_id: int, lesson_date: date = None, db: Session = Depends(get_db)):
-    return get_group_attendance(db, group_id, subject_id, lesson_date)
+@router.get("/class/{class_id}/subject/{subject_id}")
+def get_class_attendance_route(class_id: int, subject_id: int, lesson_date: date = None, db: Session = Depends(get_db)):
+    return get_class_attendance(db, class_id, subject_id, lesson_date)
 
 
 @router.get("/stats/{student_id}/subject/{subject_id}")

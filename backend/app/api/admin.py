@@ -1,22 +1,28 @@
 from ..models.user import User, UserRole
 from ..models.student import Student
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..services.admin_service import (
-    create_group, get_all_groups, delete_group,
-    create_student, get_all_students, get_students_by_group, delete_student,
+    create_class, get_all_classes, delete_class,
+    create_student, get_all_students, get_students_by_class, delete_student,
     create_teacher, get_all_teachers, delete_teacher,
-    create_subject, get_all_subjects, get_subjects_by_group, delete_subject
+    create_subject, get_all_subjects, get_subjects_by_class, delete_subject
 )
 from ..schemas.admin import (
-    GroupCreate, GroupResponse,
+    ClassCreate, ClassResponse,
     StudentCreate, StudentResponse,
     TeacherCreate, TeacherResponse,
     SubjectCreate, SubjectResponse
 )
-from ..models.group import Group
+from ..models.group import Class
+from ..models.teacher import Teacher
 from ..utils.security import verify_token
+from ..services.import_service import (
+    import_students_from_excel, import_classes_from_excel,
+    import_teachers_from_excel, import_subjects_from_excel,
+    import_parents_from_excel
+)
 
 router = APIRouter()
 
@@ -31,28 +37,134 @@ def check_admin(authorization: str = Header(None)):
     return int(payload["sub"])
 
 
-# ==================== GROUPS ====================
+# ==================== ИМПОРТ ИЗ EXCEL ====================
 
-@router.post("/groups", response_model=GroupResponse, status_code=201)
-def add_group(group_data: GroupCreate, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
-    group = create_group(db, group_data.name, group_data.course, group_data.faculty)
+@router.post("/import/students")
+async def import_students(file: UploadFile = File(...), db: Session = Depends(get_db),
+                          admin_id: int = Depends(check_admin)):
+    """Импорт учеников из Excel (.xlsx)."""
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Поддерживаются только файлы .xlsx")
+
+    content = await file.read()
+    result = import_students_from_excel(db, content)
+
     from ..services.audit_service import log_action
-    log_action(db, admin_id, "admin", "Создал группу", f"Название:{group_data.name}, Курс:{group_data.course}")
-    return group
+    log_action(db, admin_id, "admin", "Импортировал учеников",
+               f"Создано: {result['created']}, пропущено: {result['skipped']}")
+
+    return result
 
 
-@router.get("/groups", response_model=list[GroupResponse])
-def list_groups(db: Session = Depends(get_db)):
-    return get_all_groups(db)
+@router.post("/import/classes")
+async def import_classes(file: UploadFile = File(...), db: Session = Depends(get_db),
+                         admin_id: int = Depends(check_admin)):
+    """Импорт классов из Excel (.xlsx)."""
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Поддерживаются только файлы .xlsx")
+
+    content = await file.read()
+    result = import_classes_from_excel(db, content)
+
+    from ..services.audit_service import log_action
+    log_action(db, admin_id, "admin", "Импортировал классы",
+               f"Создано: {result['created']}, пропущено: {result['skipped']}")
+
+    return result
 
 
-@router.delete("/groups/{group_id}")
-def remove_group(group_id: int, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
-    if delete_group(db, group_id):
+@router.post("/import/teachers")
+async def import_teachers(file: UploadFile = File(...), db: Session = Depends(get_db),
+                          admin_id: int = Depends(check_admin)):
+    """Импорт учителей из Excel (.xlsx)."""
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Поддерживаются только файлы .xlsx")
+
+    content = await file.read()
+    result = import_teachers_from_excel(db, content)
+
+    from ..services.audit_service import log_action
+    log_action(db, admin_id, "admin", "Импортировал учителей",
+               f"Создано: {result['created']}, пропущено: {result['skipped']}")
+
+    return result
+
+
+@router.post("/import/subjects")
+async def import_subjects(file: UploadFile = File(...), db: Session = Depends(get_db),
+                          admin_id: int = Depends(check_admin)):
+    """Импорт предметов из Excel (.xlsx)."""
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Поддерживаются только файлы .xlsx")
+
+    content = await file.read()
+    result = import_subjects_from_excel(db, content)
+
+    from ..services.audit_service import log_action
+    log_action(db, admin_id, "admin", "Импортировал предметы",
+               f"Создано: {result['created']}, пропущено: {result['skipped']}")
+
+    return result
+
+
+@router.post("/import/parents")
+async def import_parents(file: UploadFile = File(...), db: Session = Depends(get_db),
+                         admin_id: int = Depends(check_admin)):
+    """Импорт родителей из Excel (.xlsx)."""
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Поддерживаются только файлы .xlsx")
+
+    content = await file.read()
+    result = import_parents_from_excel(db, content)
+
+    from ..services.audit_service import log_action
+    log_action(db, admin_id, "admin", "Импортировал родителей",
+               f"Создано: {result['created']}, пропущено: {result['skipped']}")
+
+    return result
+
+
+# ==================== CLASSES ====================
+
+@router.post("/groups", response_model=ClassResponse, status_code=201)
+def add_class(class_data: ClassCreate, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
+    cls = create_class(db, class_data.name, class_data.grade_number,
+                       class_data.grade_letter, class_data.class_teacher_id)
+    from ..services.audit_service import log_action
+    log_action(db, admin_id, "admin", "Создал класс",
+               f"Название:{class_data.name}, Класс:{class_data.grade_number}{class_data.grade_letter}")
+    return cls
+
+
+@router.get("/groups", response_model=list[dict])
+def list_classes(db: Session = Depends(get_db)):
+    classes = get_all_classes(db)
+    result = []
+    for c in classes:
+        teacher_name = None
+        if c.class_teacher_id:
+            teacher = db.query(Teacher).filter(Teacher.id == c.class_teacher_id).first()
+            if teacher:
+                teacher_user = db.query(User).filter(User.id == teacher.user_id).first()
+                teacher_name = teacher_user.full_name if teacher_user else None
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "grade_number": c.grade_number,
+            "grade_letter": c.grade_letter,
+            "class_teacher_id": c.class_teacher_id,
+            "class_teacher_name": teacher_name
+        })
+    return result
+
+
+@router.delete("/groups/{class_id}")
+def remove_class(class_id: int, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
+    if delete_class(db, class_id):
         from ..services.audit_service import log_action
-        log_action(db, admin_id, "admin", "Удалил группу", f"ID:{group_id}")
-        return {"message": "Группа удалена"}
-    raise HTTPException(status_code=404, detail="Группа не найдена")
+        log_action(db, admin_id, "admin", "Удалил класс", f"ID:{class_id}")
+        return {"message": "Класс удалён"}
+    raise HTTPException(status_code=404, detail="Класс не найден")
 
 
 # ==================== STUDENTS ====================
@@ -61,23 +173,23 @@ def remove_group(group_id: int, db: Session = Depends(get_db), admin_id: int = D
 def add_student(student_data: StudentCreate, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     student = create_student(db=db, username=student_data.username, email=student_data.email,
                              password=student_data.password, full_name=student_data.full_name,
-                             group_id=student_data.group_id, student_card=student_data.student_card_number,
-                             enrollment_date=student_data.enrollment_date)
+                             class_id=student_data.class_id)
     from ..services.audit_service import log_action
-    log_action(db, admin_id, "admin", "Создал студента", f"Логин:{student_data.username}, ФИО:{student_data.full_name}")
+    log_action(db, admin_id, "admin", "Создал ученика", f"Логин:{student_data.username}, ФИО:{student_data.full_name}")
     return student
 
 
 @router.get("/students", response_model=list[dict])
-def list_students(group_id: int = None, db: Session = Depends(get_db)):
-    if group_id: students = get_students_by_group(db, group_id)
-    else: students = get_all_students(db)
+def list_students(class_id: int = None, db: Session = Depends(get_db)):
+    if class_id:
+        students = get_students_by_class(db, class_id)
+    else:
+        students = get_all_students(db)
     result = []
     for s in students:
-        result.append({"id": s.id, "user_id": s.user_id, "group_id": s.group_id,
-                       "student_card_number": s.student_card_number, "enrollment_date": s.enrollment_date,
+        result.append({"id": s.id, "user_id": s.user_id, "class_id": s.class_id,
                        "username": s.user.username, "email": s.user.email, "full_name": s.user.full_name,
-                       "group_name": s.group.name if s.group else "-"})
+                       "class_name": s.class_ref.name if s.class_ref else "-"})
     return result
 
 
@@ -85,9 +197,9 @@ def list_students(group_id: int = None, db: Session = Depends(get_db)):
 def remove_student(student_id: int, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     if delete_student(db, student_id):
         from ..services.audit_service import log_action
-        log_action(db, admin_id, "admin", "Удалил студента", f"ID:{student_id}")
-        return {"message": "Студент удалён"}
-    raise HTTPException(status_code=404, detail="Студент не найден")
+        log_action(db, admin_id, "admin", "Удалил ученика", f"ID:{student_id}")
+        return {"message": "Ученик удалён"}
+    raise HTTPException(status_code=404, detail="Ученик не найден")
 
 
 # ==================== TEACHERS ====================
@@ -96,9 +208,9 @@ def remove_student(student_id: int, db: Session = Depends(get_db), admin_id: int
 def add_teacher(teacher_data: TeacherCreate, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     teacher = create_teacher(db=db, username=teacher_data.username, email=teacher_data.email,
                              password=teacher_data.password, full_name=teacher_data.full_name,
-                             department=teacher_data.department, position=teacher_data.position)
+                             position=teacher_data.position)
     from ..services.audit_service import log_action
-    log_action(db, admin_id, "admin", "Создал преподавателя", f"Логин:{teacher_data.username}, ФИО:{teacher_data.full_name}")
+    log_action(db, admin_id, "admin", "Создал учителя", f"Логин:{teacher_data.username}, ФИО:{teacher_data.full_name}")
     return teacher
 
 
@@ -107,7 +219,7 @@ def list_teachers(db: Session = Depends(get_db)):
     teachers = get_all_teachers(db)
     result = []
     for t in teachers:
-        result.append({"id": t.id, "user_id": t.user_id, "department": t.department, "position": t.position,
+        result.append({"id": t.id, "user_id": t.user_id, "position": t.position,
                        "username": t.user.username, "email": t.user.email, "full_name": t.user.full_name})
     return result
 
@@ -116,9 +228,9 @@ def list_teachers(db: Session = Depends(get_db)):
 def remove_teacher(teacher_id: int, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     if delete_teacher(db, teacher_id):
         from ..services.audit_service import log_action
-        log_action(db, admin_id, "admin", "Удалил преподавателя", f"ID:{teacher_id}")
-        return {"message": "Преподаватель удалён"}
-    raise HTTPException(status_code=404, detail="Преподаватель не найден")
+        log_action(db, admin_id, "admin", "Удалил учителя", f"ID:{teacher_id}")
+        return {"message": "Учитель удалён"}
+    raise HTTPException(status_code=404, detail="Учитель не найден")
 
 
 # ==================== SUBJECTS ====================
@@ -126,24 +238,26 @@ def remove_teacher(teacher_id: int, db: Session = Depends(get_db), admin_id: int
 @router.post("/subjects", response_model=SubjectResponse, status_code=201)
 def add_subject(subject_data: SubjectCreate, db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     subject = create_subject(db=db, name=subject_data.name, teacher_id=subject_data.teacher_id,
-                             group_id=subject_data.group_id, semester=subject_data.semester, hours=subject_data.hours)
+                             class_id=subject_data.class_id, quarter=subject_data.quarter, hours=subject_data.hours)
     from ..services.audit_service import log_action
     log_action(db, admin_id, "admin", "Создал предмет", f"Название:{subject_data.name}")
     return subject
 
 
 @router.get("/subjects", response_model=list[dict])
-def list_subjects(group_id: int = None, db: Session = Depends(get_db)):
-    if group_id: subjects = get_subjects_by_group(db, group_id)
-    else: subjects = get_all_subjects(db)
+def list_subjects(class_id: int = None, db: Session = Depends(get_db)):
+    if class_id:
+        subjects = get_subjects_by_class(db, class_id)
+    else:
+        subjects = get_all_subjects(db)
     result = []
     for subj in subjects:
         teacher_user = db.query(User).filter(User.id == subj.teacher.user_id).first()
-        group = db.query(Group).filter(Group.id == subj.group_id).first()
-        result.append({"id": subj.id, "name": subj.name, "teacher_id": subj.teacher_id, "group_id": subj.group_id,
-                       "semester": subj.semester, "hours": subj.hours,
+        cls = db.query(Class).filter(Class.id == subj.class_id).first()
+        result.append({"id": subj.id, "name": subj.name, "teacher_id": subj.teacher_id, "class_id": subj.class_id,
+                       "quarter": subj.quarter, "hours": subj.hours,
                        "teacher_name": teacher_user.full_name if teacher_user else "-",
-                       "group_name": group.name if group else "-"})
+                       "class_name": cls.name if cls else "-"})
     return result
 
 
@@ -179,7 +293,8 @@ def add_parent(username: str, email: str, password: str, full_name: str, student
                     if parent.linked_student_id is None: parent.linked_student_id = int(uid)
                     children.append(su.full_name)
     db.commit()
-    log_action(db, admin_id, "admin", "Создал родителя", f"Логин:{username}, Дети:{', '.join(children) if children else 'нет'}")
+    log_action(db, admin_id, "admin", "Создал родителя",
+               f"Логин:{username}, Дети:{', '.join(children) if children else 'нет'}")
     return {"message": "Родитель создан", "parent_id": parent.id, "children": children}
 
 
@@ -215,4 +330,5 @@ def remove_user(user_id: int, db: Session = Depends(get_db), admin_id: int = Dep
 def list_users(db: Session = Depends(get_db), admin_id: int = Depends(check_admin)):
     users = db.query(User).all()
     return [{"id": u.id, "username": u.username, "email": u.email, "full_name": u.full_name,
-             "role": u.role.value if hasattr(u.role, 'value') else u.role, "linked_student_id": u.linked_student_id} for u in users]
+             "role": u.role.value if hasattr(u.role, 'value') else u.role, "linked_student_id": u.linked_student_id} for
+            u in users]

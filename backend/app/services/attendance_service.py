@@ -39,20 +39,20 @@ def mark_attendance(db: Session, student_id: int, subject_id: int,
 
 
 def get_student_attendance(db: Session, student_id: int, subject_id: int = None):
-    """Получить посещаемость студента"""
+    """Получить посещаемость ученика"""
     query = db.query(Attendance).filter(Attendance.student_id == student_id)
     if subject_id:
         query = query.filter(Attendance.subject_id == subject_id)
     return query.order_by(Attendance.date.desc()).all()
 
 
-def get_group_attendance(db: Session, group_id: int, subject_id: int, lesson_date: date = None):
-    """Получить посещаемость группы по предмету на дату"""
+def get_class_attendance(db: Session, class_id: int, subject_id: int, lesson_date: date = None):
+    """Получить посещаемость класса по предмету на дату"""
     if not lesson_date:
         lesson_date = date.today()
 
     return db.query(Attendance).join(Student).filter(
-        Student.group_id == group_id,
+        Student.class_id == class_id,
         Attendance.subject_id == subject_id,
         Attendance.date == lesson_date
     ).all()
@@ -80,7 +80,7 @@ def get_attendance_stats(db: Session, student_id: int, subject_id: int):
 
 def get_attendance_for_parent(db: Session, parent_user_id: int, subject_id: int = None):
     """
-    Получить посещаемость студента, к которому привязан родитель.
+    Получить посещаемость ученика, к которому привязан родитель.
     """
     from ..models.user import User
     from ..models.student import Student

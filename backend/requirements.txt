@@ -10,3 +10,4 @@ openpyxl
 pydantic-settings
 email-validator
 bcrypt==4.0.1
+python-docx

@@ -20,5 +20,5 @@ class User(Base):
     full_name = Column(String(100), nullable=False)
     role = Column(Enum(UserRole), nullable=False)
 
-    # Для родителя — связь со студентом
-    linked_student_id = Column(Integer, nullable=True)  # ID студента, к которому привязан родитель
+    # Для родителя — связь с учеником
+    linked_student_id = Column(Integer, nullable=True)  # ID ученика, к которому привязан родитель

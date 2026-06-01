@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..services.grade_service import (
-    get_student_grades, get_group_grades, get_average_grade,
+    get_student_grades, get_class_grades, get_average_grade,
     add_grade, update_grade, delete_grade
 )
 from ..schemas.grade import GradeCreate, GradeUpdate, GradeResponse, AverageGradeResponse
@@ -52,26 +52,26 @@ def get_average(student_id: int, subject_id: int = None, db: Session = Depends(g
     return AverageGradeResponse(student_id=student_id, subject_id=subject_id, average_grade=avg)
 
 
-@router.get("/group/{group_id}/subject/{subject_id}", response_model=list[GradeResponse])
-def get_group_grades_route(group_id: int, subject_id: int, db: Session = Depends(get_db)):
-    return get_group_grades(db, group_id, subject_id)
+@router.get("/class/{class_id}/subject/{subject_id}", response_model=list[GradeResponse])
+def get_class_grades_route(class_id: int, subject_id: int, db: Session = Depends(get_db)):
+    return get_class_grades(db, class_id, subject_id)
 
 
 @router.post("/", response_model=GradeResponse, status_code=201)
 def create_grade(grade_data: GradeCreate, authorization: str = Header(None), db: Session = Depends(get_db)):
     user_id, role = get_current_user_id(authorization)
     if role != "teacher":
-        raise HTTPException(status_code=403, detail="Только преподаватель может ставить оценки")
+        raise HTTPException(status_code=403, detail="Только учитель может ставить оценки")
     from ..models.teacher import Teacher
     teacher = db.query(Teacher).filter(Teacher.user_id == user_id).first()
     if not teacher:
-        raise HTTPException(status_code=404, detail="Преподаватель не найден")
+        raise HTTPException(status_code=404, detail="Учитель не найден")
     grade = add_grade(db=db, student_id=grade_data.student_id, subject_id=grade_data.subject_id,
                       teacher_id=teacher.id, value=grade_data.value, grade_type=grade_data.type, comment=grade_data.comment)
     user = db.query(User).filter(User.id == user_id).first()
     from ..services.audit_service import log_action
     log_action(db, user_id, user.full_name if user else str(user_id),
-               "Выставил оценку", f"Студент ID:{grade_data.student_id}, Предмет ID:{grade_data.subject_id}, Оценка:{grade_data.value}")
+               "Выставил оценку", f"Ученик ID:{grade_data.student_id}, Предмет ID:{grade_data.subject_id}, Оценка:{grade_data.value}")
     return grade
 
 
@@ -107,29 +107,29 @@ def delete_grade_route(grade_id: int, authorization: str = Header(None), db: Ses
 def get_my_grades(authorization: str = Header(None), db: Session = Depends(get_db)):
     user_id, role = get_current_user_id(authorization)
     if role != "teacher":
-        raise HTTPException(status_code=403, detail="Только для преподавателя")
+        raise HTTPException(status_code=403, detail="Только для учителя")
     from ..models.teacher import Teacher
     from ..models.grade import Grade
     from ..models.student import Student
     from ..models.subject import Subject
-    from ..models.group import Group
+    from ..models.group import Class
     teacher = db.query(Teacher).filter(Teacher.user_id == user_id).first()
     if not teacher:
-        raise HTTPException(status_code=404, detail="Преподаватель не найден")
+        raise HTTPException(status_code=404, detail="Учитель не найден")
     grades = db.query(Grade).filter(Grade.teacher_id == teacher.id).order_by(Grade.date.desc()).all()
     result = []
     for g in grades:
         student = db.query(Student).filter(Student.id == g.student_id).first()
         student_user = db.query(User).filter(User.id == student.user_id).first() if student else None
         subject = db.query(Subject).filter(Subject.id == g.subject_id).first()
-        group = db.query(Group).filter(Group.id == student.group_id).first() if student else None
+        cls = db.query(Class).filter(Class.id == student.class_id).first() if student else None
         result.append({
             "id": g.id, "student_id": g.student_id, "subject_id": g.subject_id,
             "teacher_id": g.teacher_id, "value": g.value, "type": g.type,
             "date": g.date.isoformat() if g.date else None, "comment": g.comment,
             "student_name": student_user.full_name if student_user else f"ID: {g.student_id}",
             "subject_name": subject.name if subject else f"ID: {g.subject_id}",
-            "group_name": group.name if group else "-"
+            "class_name": cls.name if cls else "-"
         })
     return result
 
@@ -138,16 +138,16 @@ def get_my_grades(authorization: str = Header(None), db: Session = Depends(get_d
 def get_teacher_subjects(authorization: str = Header(None), db: Session = Depends(get_db)):
     user_id, role = get_current_user_id(authorization)
     if role != "teacher":
-        raise HTTPException(status_code=403, detail="Только для преподавателя")
+        raise HTTPException(status_code=403, detail="Только для учителя")
     from ..models.teacher import Teacher
     from ..models.subject import Subject
-    from ..models.group import Group
+    from ..models.group import Class
     teacher = db.query(Teacher).filter(Teacher.user_id == user_id).first()
     if not teacher:
-        raise HTTPException(status_code=404, detail="Преподаватель не найден")
+        raise HTTPException(status_code=404, detail="Учитель не найден")
     subjects = db.query(Subject).filter(Subject.teacher_id == teacher.id).all()
     result = []
     for s in subjects:
-        group = db.query(Group).filter(Group.id == s.group_id).first()
-        result.append({"id": s.id, "name": s.name, "group_name": group.name if group else "-", "semester": s.semester})
+        cls = db.query(Class).filter(Class.id == s.class_id).first()
+        result.append({"id": s.id, "name": s.name, "class_name": cls.name if cls else "-", "quarter": s.quarter})
     return result

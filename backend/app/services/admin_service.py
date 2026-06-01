@@ -2,48 +2,52 @@ from sqlalchemy.orm import Session
 from ..models.user import User, UserRole
 from ..models.student import Student
 from ..models.teacher import Teacher
-from ..models.group import Group
+from ..models.group import Class
 from ..models.subject import Subject
 from ..utils.security import hash_password
 
 
-# ========== ГРУППЫ ==========
+# ========== КЛАССЫ ==========
 
-def create_group(db: Session, name: str, course: int, faculty: str):
-    """Создать учебную группу"""
-    group = Group(name=name, course=course, faculty=faculty)
-    db.add(group)
+def create_class(db: Session, name: str, grade_number: int, grade_letter: str, class_teacher_id: int = None):
+    """Создать класс"""
+    cls = Class(
+        name=name,
+        grade_number=grade_number,
+        grade_letter=grade_letter,
+        class_teacher_id=class_teacher_id
+    )
+    db.add(cls)
     db.commit()
-    db.refresh(group)
-    return group
+    db.refresh(cls)
+    return cls
 
 
-def get_all_groups(db: Session):
-    """Получить все группы"""
-    return db.query(Group).all()
+def get_all_classes(db: Session):
+    """Получить все классы"""
+    return db.query(Class).all()
 
 
-def get_group(db: Session, group_id: int):
-    """Получить группу по ID"""
-    return db.query(Group).filter(Group.id == group_id).first()
+def get_class(db: Session, class_id: int):
+    """Получить класс по ID"""
+    return db.query(Class).filter(Class.id == class_id).first()
 
 
-def delete_group(db: Session, group_id: int):
-    """Удалить группу"""
-    group = db.query(Group).filter(Group.id == group_id).first()
-    if group:
-        db.delete(group)
+def delete_class(db: Session, class_id: int):
+    """Удалить класс"""
+    cls = db.query(Class).filter(Class.id == class_id).first()
+    if cls:
+        db.delete(cls)
         db.commit()
         return True
     return False
 
 
-# ========== СТУДЕНТЫ ==========
+# ========== УЧЕНИКИ ==========
 
 def create_student(db: Session, username: str, email: str, password: str,
-                   full_name: str, group_id: int, student_card: str,
-                   enrollment_date: str, parent_username: str = None):
-    """Создать студента и опционально привязать родителя"""
+                   full_name: str, class_id: int, parent_username: str = None):
+    """Создать ученика и опционально привязать родителя"""
 
     user = User(
         username=username,
@@ -57,14 +61,11 @@ def create_student(db: Session, username: str, email: str, password: str,
 
     student = Student(
         user_id=user.id,
-        group_id=group_id,
-        student_card_number=student_card,
-        enrollment_date=enrollment_date
+        class_id=class_id
     )
     db.add(student)
     db.flush()
 
-    # Если указан родитель — привязываем
     if parent_username:
         parent = db.query(User).filter(
             User.username == parent_username,
@@ -80,17 +81,17 @@ def create_student(db: Session, username: str, email: str, password: str,
 
 
 def get_all_students(db: Session):
-    """Получить всех студентов с данными пользователей и групп"""
-    return db.query(Student).join(User).join(Group).all()
+    """Получить всех учеников с данными пользователей и классов"""
+    return db.query(Student).join(User).join(Class).all()
 
 
-def get_students_by_group(db: Session, group_id: int):
-    """Получить студентов по группе"""
-    return db.query(Student).filter(Student.group_id == group_id).join(User).all()
+def get_students_by_class(db: Session, class_id: int):
+    """Получить учеников по классу"""
+    return db.query(Student).filter(Student.class_id == class_id).join(User).all()
 
 
 def delete_student(db: Session, student_id: int):
-    """Удалить студента и его пользователя"""
+    """Удалить ученика и его пользователя"""
     student = db.query(Student).filter(Student.id == student_id).first()
     if student:
         user_id = student.user_id
@@ -101,11 +102,11 @@ def delete_student(db: Session, student_id: int):
     return False
 
 
-# ========== ПРЕПОДАВАТЕЛИ ==========
+# ========== УЧИТЕЛЯ ==========
 
 def create_teacher(db: Session, username: str, email: str, password: str,
-                   full_name: str, department: str, position: str):
-    """Создать преподавателя"""
+                   full_name: str, position: str = None):
+    """Создать учителя"""
 
     user = User(
         username=username,
@@ -119,7 +120,6 @@ def create_teacher(db: Session, username: str, email: str, password: str,
 
     teacher = Teacher(
         user_id=user.id,
-        department=department,
         position=position
     )
     db.add(teacher)
@@ -129,12 +129,12 @@ def create_teacher(db: Session, username: str, email: str, password: str,
 
 
 def get_all_teachers(db: Session):
-    """Получить всех преподавателей"""
+    """Получить всех учителей"""
     return db.query(Teacher).join(User).all()
 
 
 def delete_teacher(db: Session, teacher_id: int):
-    """Удалить преподавателя"""
+    """Удалить учителя"""
     teacher = db.query(Teacher).filter(Teacher.id == teacher_id).first()
     if teacher:
         user_id = teacher.user_id
@@ -147,14 +147,14 @@ def delete_teacher(db: Session, teacher_id: int):
 
 # ========== ПРЕДМЕТЫ ==========
 
-def create_subject(db: Session, name: str, teacher_id: int, group_id: int,
-                   semester: int, hours: int):
+def create_subject(db: Session, name: str, teacher_id: int, class_id: int,
+                   quarter: int, hours: int):
     """Создать предмет"""
     subject = Subject(
         name=name,
         teacher_id=teacher_id,
-        group_id=group_id,
-        semester=semester,
+        class_id=class_id,
+        quarter=quarter,
         hours=hours
     )
     db.add(subject)
@@ -165,12 +165,12 @@ def create_subject(db: Session, name: str, teacher_id: int, group_id: int,
 
 def get_all_subjects(db: Session):
     """Получить все предметы"""
-    return db.query(Subject).join(Teacher).join(Group).all()
+    return db.query(Subject).join(Teacher).join(Class).all()
 
 
-def get_subjects_by_group(db: Session, group_id: int):
-    """Получить предметы по группе"""
-    return db.query(Subject).filter(Subject.group_id == group_id).all()
+def get_subjects_by_class(db: Session, class_id: int):
+    """Получить предметы по классу"""
+    return db.query(Subject).filter(Subject.class_id == class_id).all()
 
 
 def delete_subject(db: Session, subject_id: int):

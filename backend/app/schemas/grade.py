@@ -7,7 +7,7 @@ class GradeCreate(BaseModel):
     student_id: int
     subject_id: int
     value: int = Field(..., ge=2, le=5)
-    type: str = Field(..., pattern="^(exam|test|coursework|practice)$")
+    type: str = Field(..., pattern="^(exam|practice|vpr|control|independent|dictation|test|board_answer|homework)$")
     comment: Optional[str] = None
 
 

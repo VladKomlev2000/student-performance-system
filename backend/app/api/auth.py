@@ -19,7 +19,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Пользователь с таким email уже существует")
     if user_data.role == UserRole.PARENT.value and not user_data.linked_student_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Для роли 'родитель' необходимо указать linked_student_id")
+                            detail="Для роли 'родитель' необходимо указать linked_student_id (ID ученика)")
 
     new_user = User(
         username=user_data.username,
@@ -79,8 +79,10 @@ def get_current_user(token: str, db: Session = Depends(get_db)):
 
 @router.put("/change-password")
 def change_password(
-        old_password: str,
-        new_password: str,
+        old_password: str = "",
+        new_password: str = "",
+        user_id: int = None,
+        admin_reset: bool = False,
         authorization: str = Header(None),
         db: Session = Depends(get_db)
 ):
@@ -93,16 +95,31 @@ def change_password(
     if not payload:
         raise HTTPException(status_code=401, detail="Недействительный токен")
 
-    user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id).first()
+    current_user_id = int(payload["sub"])
+    current_user = db.query(User).filter(User.id == current_user_id).first()
 
-    if not user or not verify_password(old_password, user.hashed_password):
+    # Админ меняет пароль любому пользователю
+    if admin_reset and current_user.role == UserRole.ADMIN and user_id:
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        target_user.hashed_password = hash_password(new_password)
+        db.commit()
+        from ..services.audit_service import log_action
+        log_action(db, current_user_id, current_user.full_name, "Сменил пароль пользователю", f"ID:{user_id}")
+        return {"message": f"Пароль пользователя {target_user.full_name} изменён"}
+
+    # Обычная смена своего пароля
+    if not old_password or not new_password:
+        raise HTTPException(status_code=400, detail="Укажите старый и новый пароль")
+
+    if not verify_password(old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Неверный старый пароль")
 
-    user.hashed_password = hash_password(new_password)
+    current_user.hashed_password = hash_password(new_password)
     db.commit()
 
     from ..services.audit_service import log_action
-    log_action(db, user_id, user.full_name, "Сменил пароль", "")
+    log_action(db, current_user_id, current_user.full_name, "Сменил пароль", "")
 
     return {"message": "Пароль изменён"}

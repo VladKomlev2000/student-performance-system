@@ -7,7 +7,7 @@ from .api import auth, grades, attendance, admin, parent, export, reports
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Электронная система учёта успеваемости студентов",
+    description="Электронная система учёта успеваемости учащихся",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
@@ -33,7 +33,7 @@ app.include_router(parent.router, prefix="/api/parent", tags=["Родитель"
 app.include_router(export.router, prefix="/api/export", tags=["Экспорт"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Отчёты"])
 
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+app.mount("/static", StaticFiles(directory="../frontend", html=True), name="static")
 
 @app.get("/")
 async def root():

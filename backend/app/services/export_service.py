@@ -2,6 +2,10 @@ from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import datetime
+from docx import Document
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
 
 
 def export_grades_to_excel(grades_data: list, student_name: str = "Студент") -> BytesIO:
@@ -12,7 +16,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
     ws = wb.active
     ws.title = "Оценки"
 
-    # Стили
     header_font = Font(name='Arial', bold=True, size=12, color='FFFFFF')
     header_fill = PatternFill(start_color='4361ee', end_color='4361ee', fill_type='solid')
     header_alignment = Alignment(horizontal='center', vertical='center')
@@ -24,7 +27,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
         bottom=Side(style='thin')
     )
 
-    # Заголовок
     ws.merge_cells('A1:F1')
     ws['A1'] = f"Ведомость оценок — {student_name}"
     ws['A1'].font = Font(name='Arial', bold=True, size=14, color='2c3e50')
@@ -35,7 +37,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
     ws['A2'].font = Font(name='Arial', size=10, color='7f8c8d')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    # Шапка таблицы
     headers = ['№', 'Предмет', 'Оценка', 'Тип', 'Дата', 'Комментарий']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col, value=header)
@@ -44,13 +45,14 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
         cell.alignment = header_alignment
         cell.border = thin_border
 
-    # Данные
-    type_map = {'exam': 'Экзамен', 'test': 'Зачёт', 'coursework': 'Курсовая', 'practice': 'Практика'}
+    type_map = {'exam': 'Экзамен', 'practice': 'Практическая работа', 'vpr': 'ВПР',
+                'control': 'Контрольная работа', 'independent': 'Самостоятельная работа',
+                'dictation': 'Диктант', 'test': 'Тест', 'board_answer': 'Ответ у доски',
+                'homework': 'Домашняя работа'}
 
     for i, grade in enumerate(grades_data, 1):
         row = i + 4
 
-        # Поддержка и объектов, и словарей
         if isinstance(grade, dict):
             subject_name = grade.get('subject_name', f"ID: {grade.get('subject_id', '-')}")
             value = grade.get('value', '-')
@@ -69,7 +71,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
         elif isinstance(date_val, str) and len(date_val) >= 10:
             date_val = date_val[:10]
 
-        type_map = {'exam': 'Экзамен', 'test': 'Зачёт', 'coursework': 'Курсовая', 'practice': 'Практика'}
         grade_type_ru = type_map.get(grade_type, grade_type)
 
         value_fill = PatternFill()
@@ -92,7 +93,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
                 cell.fill = value_fill
                 cell.font = Font(bold=True)
 
-    # Ширина колонок
     ws.column_dimensions['A'].width = 5
     ws.column_dimensions['B'].width = 30
     ws.column_dimensions['C'].width = 10
@@ -100,7 +100,6 @@ def export_grades_to_excel(grades_data: list, student_name: str = "Студен�
     ws.column_dimensions['E'].width = 15
     ws.column_dimensions['F'].width = 30
 
-    # Сохраняем в BytesIO
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -115,7 +114,6 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
     ws = wb.active
     ws.title = "Посещаемость"
 
-    # Стили
     header_font = Font(name='Arial', bold=True, size=12, color='FFFFFF')
     header_fill = PatternFill(start_color='4361ee', end_color='4361ee', fill_type='solid')
     header_alignment = Alignment(horizontal='center', vertical='center')
@@ -127,7 +125,6 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
         bottom=Side(style='thin')
     )
 
-    # Заголовок
     ws.merge_cells('A1:E1')
     ws['A1'] = f"Ведомость посещаемости — {student_name}"
     ws['A1'].font = Font(name='Arial', bold=True, size=14, color='2c3e50')
@@ -138,7 +135,6 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
     ws['A2'].font = Font(name='Arial', size=10, color='7f8c8d')
     ws['A2'].alignment = Alignment(horizontal='center')
 
-    # Статистика
     status_map = {'present': 'Присутствовал', 'absent': 'Отсутствовал',
                   'late': 'Опоздал', 'excused': 'Уваж. причина'}
 
@@ -151,7 +147,6 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
     ws['A4'] = f"Всего занятий: {total} | Посещено: {present} | Пропущено: {absent} | Процент: {rate}%"
     ws['A4'].font = Font(name='Arial', bold=True, size=11)
 
-    # Шапка таблицы
     headers = ['№', 'Предмет', 'Дата', 'Статус', 'Отметка']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=6, column=col, value=header)
@@ -170,14 +165,10 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
         if hasattr(date_val, 'strftime'):
             date_val = date_val.strftime('%d.%m.%Y')
         elif isinstance(date_val, str) and len(date_val) >= 10:
-            try:
-                date_val = date_val[:10]
-            except:
-                pass
+            date_val = date_val[:10]
 
         status_text = status_map.get(status, status)
 
-        # Цвет статуса
         status_fill = PatternFill()
         if status == 'present':
             status_fill = PatternFill(start_color='d4edda', end_color='d4edda', fill_type='solid')
@@ -196,7 +187,6 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
             if col == 4:
                 cell.fill = status_fill
 
-    # Ширина
     ws.column_dimensions['A'].width = 5
     ws.column_dimensions['B'].width = 25
     ws.column_dimensions['C'].width = 15
@@ -205,5 +195,293 @@ def export_attendance_to_excel(attendance_data: list, student_name: str = "Ст�
 
     output = BytesIO()
     wb.save(output)
+    output.seek(0)
+    return output
+
+
+# ==================== ЭКСПОРТ В WORD ====================
+
+def export_grades_to_word(grades_data: list, student_name: str = "Ученик") -> BytesIO:
+    """Экспорт оценок в Word (docx)."""
+    doc = Document()
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
+
+    title = doc.add_heading(f'Ведомость оценок — {student_name}', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_run = date_para.add_run(f'Дата выгрузки: {datetime.now().strftime("%d.%m.%Y %H:%M")}')
+    date_run.font.size = Pt(10)
+    date_run.font.color.rgb = RGBColor(127, 140, 141)
+
+    doc.add_paragraph()
+
+    table = doc.add_table(rows=1, cols=6)
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    headers = ['№', 'Предмет', 'Оценка', 'Тип', 'Дата', 'Комментарий']
+    header_cells = table.rows[0].cells
+    for i, header in enumerate(headers):
+        header_cells[i].text = header
+        for para in header_cells[i].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in para.runs:
+                run.font.bold = True
+                run.font.size = Pt(10)
+
+    type_map = {
+        'exam': 'Экзамен', 'practice': 'Практическая работа',
+        'vpr': 'ВПР', 'control': 'Контрольная работа',
+        'independent': 'Самостоятельная работа', 'dictation': 'Диктант',
+        'test': 'Тест', 'board_answer': 'Ответ у доски', 'homework': 'Домашняя работа'
+    }
+
+    for i, grade in enumerate(grades_data, 1):
+        row = table.add_row()
+
+        if isinstance(grade, dict):
+            subject_name = grade.get('subject_name', f"ID: {grade.get('subject_id', '-')}")
+            value = grade.get('value', '-')
+            grade_type = grade.get('type', '-')
+            date_val = grade.get('date', '-')
+            comment = grade.get('comment', '-') or '-'
+        else:
+            subject_name = getattr(grade, 'subject_name', None) or f"ID: {getattr(grade, 'subject_id', '-')}"
+            value = getattr(grade, 'value', '-')
+            grade_type = getattr(grade, 'type', '-')
+            date_val = getattr(grade, 'date', '-')
+            comment = getattr(grade, 'comment', None) or '-'
+
+        if hasattr(date_val, 'strftime'):
+            date_val = date_val.strftime('%d.%m.%Y')
+        elif isinstance(date_val, str) and len(date_val) >= 10:
+            date_val = date_val[:10]
+
+        grade_type_ru = type_map.get(grade_type, grade_type)
+
+        row_data = [str(i), str(subject_name), str(value), grade_type_ru, str(date_val), str(comment)]
+        for j, val in enumerate(row_data):
+            row.cells[j].text = val
+            for para in row.cells[j].paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.font.size = Pt(10)
+
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+    return output
+
+
+def export_attendance_to_word(attendance_data: list, student_name: str = "Ученик") -> BytesIO:
+    """Экспорт посещаемости в Word (docx)."""
+    doc = Document()
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
+
+    title = doc.add_heading(f'Ведомость посещаемости — {student_name}', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_run = date_para.add_run(f'Дата выгрузки: {datetime.now().strftime("%d.%m.%Y %H:%M")}')
+    date_run.font.size = Pt(10)
+    date_run.font.color.rgb = RGBColor(127, 140, 141)
+
+    status_map = {'present': 'Присутствовал', 'absent': 'Отсутствовал',
+                  'late': 'Опоздал', 'excused': 'Уваж. причина'}
+
+    total = len(attendance_data)
+    present = sum(1 for r in attendance_data if getattr(r, 'status', None) == 'present')
+    absent = sum(1 for r in attendance_data if getattr(r, 'status', None) == 'absent')
+    rate = round(present / total * 100, 1) if total > 0 else 0
+
+    stats_para = doc.add_paragraph()
+    stats_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    stats_run = stats_para.add_run(f'Всего: {total} | Посещено: {present} | Пропущено: {absent} | Процент: {rate}%')
+    stats_run.font.bold = True
+
+    doc.add_paragraph()
+
+    table = doc.add_table(rows=1, cols=4)
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    headers = ['№', 'Предмет', 'Дата', 'Статус']
+    header_cells = table.rows[0].cells
+    for i, header in enumerate(headers):
+        header_cells[i].text = header
+        for para in header_cells[i].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in para.runs:
+                run.font.bold = True
+                run.font.size = Pt(10)
+
+    for i, record in enumerate(attendance_data, 1):
+        row = table.add_row()
+
+        subject_id = getattr(record, 'subject_id', '-')
+        date_val = getattr(record, 'date', '-')
+        status = getattr(record, 'status', '-')
+
+        if hasattr(date_val, 'strftime'):
+            date_val = date_val.strftime('%d.%m.%Y')
+        elif isinstance(date_val, str) and len(date_val) >= 10:
+            date_val = date_val[:10]
+
+        status_text = status_map.get(status, status)
+
+        row_data = [str(i), f"Предмет ID: {subject_id}", str(date_val), status_text]
+        for j, val in enumerate(row_data):
+            row.cells[j].text = val
+            for para in row.cells[j].paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.font.size = Pt(10)
+
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+    return output
+
+
+def export_class_report_to_word(report_data: dict) -> BytesIO:
+    """Экспорт ведомости класса в Word (docx)."""
+    doc = Document()
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
+
+    group_name = report_data.get('group_name', 'Класс')
+    subject_name = report_data.get('subject_name', 'Предмет')
+    title = doc.add_heading(f'Ведомость: {group_name} — {subject_name}', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_run = date_para.add_run(f'Дата выгрузки: {datetime.now().strftime("%d.%m.%Y %H:%M")}')
+    date_run.font.size = Pt(10)
+    date_run.font.color.rgb = RGBColor(127, 140, 141)
+
+    doc.add_paragraph()
+
+    students = report_data.get('students', [])
+
+    type_map = {
+        'exam': 'Экзамен', 'practice': 'Практическая работа',
+        'vpr': 'ВПР', 'control': 'Контрольная работа',
+        'independent': 'Самостоятельная работа', 'dictation': 'Диктант',
+        'test': 'Тест', 'board_answer': 'Ответ у доски', 'homework': 'Домашняя работа'
+    }
+
+    for student in students:
+        student_name = student.get('student_name', 'Неизвестно')
+        average = student.get('average', 0)
+        grades = student.get('grades', [])
+
+        doc.add_heading(f'{student_name} (средний балл: {average})', level=3)
+
+        if grades:
+            table = doc.add_table(rows=1, cols=4)
+            table.style = 'Table Grid'
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+            headers = ['Оценка', 'Тип', 'Дата', 'Комментарий']
+            header_cells = table.rows[0].cells
+            for i, header in enumerate(headers):
+                header_cells[i].text = header
+                for para in header_cells[i].paragraphs:
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for run in para.runs:
+                        run.font.bold = True
+                        run.font.size = Pt(9)
+
+            for grade in grades:
+                row = table.add_row()
+                value = grade.get('value', '-')
+                grade_type = type_map.get(grade.get('type', ''), grade.get('type', '-'))
+                date_val = grade.get('date', '-')
+                comment = grade.get('comment', '-') or '-'
+
+                if isinstance(date_val, str) and len(date_val) >= 10:
+                    date_val = date_val[:10]
+
+                row_data = [str(value), grade_type, str(date_val), str(comment)]
+                for j, val in enumerate(row_data):
+                    row.cells[j].text = val
+                    for para in row.cells[j].paragraphs:
+                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        for run in para.runs:
+                            run.font.size = Pt(9)
+        else:
+            doc.add_paragraph('Оценок нет')
+
+        doc.add_paragraph()
+
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+    return output
+
+
+def export_logs_to_word(logs: list) -> BytesIO:
+    """Экспорт логов в Word (docx)."""
+    doc = Document()
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(10)
+
+    title = doc.add_heading('Журнал действий системы', level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    date_para = doc.add_paragraph()
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_run = date_para.add_run(f'Дата выгрузки: {datetime.now().strftime("%d.%m.%Y %H:%M")}')
+    date_run.font.size = Pt(9)
+    date_run.font.color.rgb = RGBColor(127, 140, 141)
+
+    doc.add_paragraph()
+
+    table = doc.add_table(rows=1, cols=5)
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    headers = ['ID', 'Пользователь', 'Действие', 'Детали', 'Дата']
+    header_cells = table.rows[0].cells
+    for i, header in enumerate(headers):
+        header_cells[i].text = header
+        for para in header_cells[i].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in para.runs:
+                run.font.bold = True
+                run.font.size = Pt(9)
+
+    for log in logs:
+        row = table.add_row()
+        row_data = [
+            str(log.id),
+            log.username,
+            log.action,
+            log.details or '-',
+            log.created_at.strftime('%d.%m.%Y %H:%M') if log.created_at else '-'
+        ]
+        for j, val in enumerate(row_data):
+            row.cells[j].text = val
+            for para in row.cells[j].paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.font.size = Pt(9)
+
+    output = BytesIO()
+    doc.save(output)
     output.seek(0)
     return output

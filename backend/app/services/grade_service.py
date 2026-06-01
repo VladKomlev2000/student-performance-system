@@ -7,23 +7,23 @@ from ..models.user import UserRole
 
 
 def get_student_grades(db: Session, student_id: int, subject_id: int = None):
-    """Получить все оценки студента (опционально по предмету)"""
+    """Получить все оценки ученика (опционально по предмету)"""
     query = db.query(Grade).filter(Grade.student_id == student_id)
     if subject_id:
         query = query.filter(Grade.subject_id == subject_id)
     return query.order_by(Grade.date.desc()).all()
 
 
-def get_group_grades(db: Session, group_id: int, subject_id: int):
-    """Получить оценки всей группы по предмету"""
+def get_class_grades(db: Session, class_id: int, subject_id: int):
+    """Получить оценки всего класса по предмету"""
     return db.query(Grade).join(Student).filter(
-        Student.group_id == group_id,
+        Student.class_id == class_id,
         Grade.subject_id == subject_id
     ).order_by(Grade.date.desc()).all()
 
 
 def get_average_grade(db: Session, student_id: int, subject_id: int = None):
-    """Рассчитать средний балл студента"""
+    """Рассчитать средний балл ученика"""
     query = db.query(func.avg(Grade.value)).filter(Grade.student_id == student_id)
     if subject_id:
         query = query.filter(Grade.subject_id == subject_id)
@@ -33,7 +33,7 @@ def get_average_grade(db: Session, student_id: int, subject_id: int = None):
 
 def add_grade(db: Session, student_id: int, subject_id: int, teacher_id: int,
               value: int, grade_type: str, comment: str = None):
-    """Добавить оценку студенту"""
+    """Добавить оценку ученику"""
     grade = Grade(
         student_id=student_id,
         subject_id=subject_id,
@@ -74,7 +74,7 @@ def delete_grade(db: Session, grade_id: int):
 
 def get_grades_for_parent(db: Session, parent_user_id: int, subject_id: int = None):
     """
-    Получить оценки студента, к которому привязан родитель.
+    Получить оценки ученика, к которому привязан родитель.
     parent_user_id — это id пользователя с ролью parent.
     """
     from ..models.user import User
@@ -90,5 +90,5 @@ def get_grades_for_parent(db: Session, parent_user_id: int, subject_id: int = No
     if not student:
         return []
 
-    # Возвращаем оценки этого студента
+    # Возвращаем оценки этого ученика
     return get_student_grades(db, student.id, subject_id)

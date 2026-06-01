@@ -51,7 +51,7 @@ def get_child_average(
     student = db.query(Student).filter(Student.user_id == parent.linked_student_id).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Студент не найден")
+        raise HTTPException(status_code=404, detail="Ученик не найден")
 
     avg = get_average_grade(db, student.id, subject_id)
     return AverageGradeResponse(
@@ -85,7 +85,7 @@ def get_child_attendance_stats(
     student = db.query(Student).filter(Student.user_id == parent.linked_student_id).first()
 
     if not student:
-        raise HTTPException(status_code=404, detail="Студент не найден")
+        raise HTTPException(status_code=404, detail="Ученик не найден")
 
     return get_attendance_stats(db, student.id, subject_id)
 
@@ -97,7 +97,7 @@ def get_child_info(
 ):
     """Получить информацию о ребёнке"""
     from ..models.student import Student
-    from ..models.group import Group
+    from ..models.group import Class
 
     parent = db.query(User).filter(User.id == parent_id).first()
     if not parent or not parent.linked_student_id:
@@ -105,16 +105,15 @@ def get_child_info(
 
     student = db.query(Student).filter(Student.user_id == parent.linked_student_id).first()
     if not student:
-        raise HTTPException(status_code=404, detail="Студент не найден")
+        raise HTTPException(status_code=404, detail="Ученик не найден")
 
     child_user = db.query(User).filter(User.id == student.user_id).first()
-    group = db.query(Group).filter(Group.id == student.group_id).first()
+    cls = db.query(Class).filter(Class.id == student.class_id).first()
 
     return {
         "student_id": student.id,
         "full_name": child_user.full_name,
         "email": child_user.email,
-        "student_card": student.student_card_number,
-        "group_name": group.name if group else "Не указана",
-        "enrollment_date": student.enrollment_date
+        "group_name": cls.name if cls else "Не указан",
+        "class_id": student.class_id
     }

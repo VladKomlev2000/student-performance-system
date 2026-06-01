@@ -7,7 +7,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=1, max_length=100)
     role: str = Field(..., pattern="^(admin|teacher|student|parent)$")
-    linked_student_id: Optional[int] = None  # Для родителя
+    linked_student_id: Optional[int] = None  # Для родителя — связь с учеником
 
 class UserLogin(BaseModel):
     username: str

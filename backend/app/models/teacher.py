@@ -8,8 +8,8 @@ class Teacher(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    department = Column(String(100), nullable=False)
-    position = Column(String(100))  # Должность
+    position = Column(String(100))  # Преподаваемый предмет
 
     user = relationship("User")
     subjects = relationship("Subject", back_populates="teacher")
+    supervised_class = relationship("Class", back_populates="class_teacher", uselist=False)
